@@ -20,6 +20,7 @@ class TopWindow(tk.Tk):
         self.protocol("WM_DELETE_WINDOW", self.close)
         self.information_window = None
         self.calculator_window = None
+        self.graph_window = None
         
     def create_widget(self):
         self.control_frame = tk.Frame(self)
@@ -33,6 +34,9 @@ class TopWindow(tk.Tk):
         
         self.calculator_button = tk.Button(self, text="Calculator", command=self.open_calculator)
         self.calculator_button.pack(side=tk.LEFT)
+        
+        self.graph_button = tk.Button(self, text="Graph", command=self.show_graph)
+        self.graph_button.pack(side=tk.LEFT)
         
     def open_calculator(self):
         if self.calculator_window:
@@ -71,6 +75,13 @@ class TopWindow(tk.Tk):
         else:
             self.information_window = InformationWindow(self)
             self.information_window.protocol("WM_DELETE_WINDOW", self.information_window.close)
+
+    def show_graph(self):
+        if self.graph_window:
+            self.graph_window.focus()
+        else:
+            self.graph_window = Graph(self)
+            self.graph_window.protocol("WM_DELETE_WINDOW", self.graph_window.close)
 
 class DisplayWindow(tk.Toplevel):
     def __init__(self, image, header, title, parent=None):
@@ -213,7 +224,7 @@ class DisplayWindow(tk.Toplevel):
         self.parent.display_windows.remove(self)
         self.destroy()
 
-class InformationWindow(tk.Tk):
+class InformationWindow(tk.Toplevel):
     def __init__(self, parent=None):
         super().__init__()
         self.parent = parent
@@ -231,7 +242,7 @@ class InformationWindow(tk.Tk):
         self.parent.information_window = None
         self.destroy()
 
-class HeaderWindow(tk.Tk):
+class HeaderWindow(tk.Toplevel):
     def __init__(self, header, parent=None):
         super().__init__()
         self.parent = parent
@@ -253,7 +264,7 @@ class HeaderWindow(tk.Tk):
         self.parent.header_window = None
         self.destroy()
 
-class Calculator(tk.Tk):
+class Calculator(tk.Toplevel):
     def __init__(self, parent=None):
         super().__init__()
         self.parent = parent
@@ -309,31 +320,12 @@ class Calculator(tk.Tk):
     def calculate(self):
         formular = self.formular_entry.get()
         replace_dict = {
-            "sqrt": "np.sqrt",
-            "log": "np.log",
-            "exp": "np.exp",
-            "sin": "np.sin",
-            "cos": "np.cos",
-            "tan": "np.tan",
-            "asin": "np.arcsin",
-            "acos": "np.arccos",
-            "atan": "np.arctan",
-            "abs": "np.abs",
-            "min": "np.min",
-            "max": "np.max",
-            "mean": "np.mean",
-            "median": "np.median",
-            "std": "np.std",
-            "sum": "np.sum",
-            "var": "np.var",
-            "clip": "np.clip",
-            "int": "np.int",
-            "float": "np.float",
-            "round": "np.round",
-            "floor": "np.floor",
-            "ceil": "np.ceil",
-            "pi": "np.pi",
-            "e": "np.e",
+            "#sqrt(": "np.sqrt(",
+            "#log(": "np.log(",
+            "#exp(": "np.exp(",
+            "#sin(": "np.sin(",
+            "#cos(": "np.cos(",
+            "#tan(": "np.tan(",
         }
         for key in self.variables.keys():
             if key in formular:
@@ -350,6 +342,28 @@ class Calculator(tk.Tk):
 
     def close(self):
         self.parent.calculator_window = None
+        self.destroy()
+    
+class Graph(tk.Toplevel):
+    def __init__(self, parent=None):
+        super().__init__()
+        self.parent = parent
+        self.title("Graph")
+        self.geometry("400x300")
+        self.attributes("-topmost", True)        
+        self.create_widget()
+        
+    def create_widget(self):
+        options = ['Line']
+        self.control_frame1 = tk.Frame(self)
+        self.control_frame1.pack(side=tk.TOP, fill=tk.X)
+        self.graph_type_label = tk.Label(self.control_frame1, text="Graph Type:")
+        self.graph_type_label.pack(side=tk.LEFT, fill=tk.X)
+        self.graph_type = ttk.Combobox(self.control_frame1, values=options)
+        self.graph_type.pack(side=tk.LEFT, expand=True)
+        
+    def close(self):
+        self.parent.graph_window = None
         self.destroy()
 if __name__ == "__main__":
     app = TopWindow()
