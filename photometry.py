@@ -191,6 +191,12 @@ class DisplayWindow(tk.Toplevel):
                     temp = self.coords1
                     self.drawrect()
                     self.coords1 = temp
+            elif self.drawing_type == "Area":
+                if self.coords1 is not None and self.coords2 is None:
+                    self.coords2 = (event.xdata, event.ydata)
+                    temp = self.coords1
+                    self.drawarea()
+                    self.coords1 = temp
         
     def on_scroll(self, event):
         base_scale = 1.2
@@ -247,6 +253,28 @@ class DisplayWindow(tk.Toplevel):
                         self.drawrect()
                     elif self.drawing_type == "Line":
                         self.drawline()
+                    elif self.drawing_type == "Area":
+                        self.drawarea()
+    
+    def drawarea(self):
+        current_time = time.time()
+        if self.coords1 and self.coords2:
+            if self.parent.graph_window:
+                if current_time - self.last_update_time > self.target_interval:
+                    self.data = self.get_area(int(self.coords1[0]), int(self.coords1[1]), int(self.coords2[0]), int(self.coords2[1]))
+                    self.parent.graph_window.update_graph(self.data)
+                self.last_update_time = current_time
+            x1 = int(self.coords1[0])
+            y1 = int(self.coords1[1])
+            x2 = int(self.coords2[0])
+            y2 = int(self.coords2[1])
+            if self.annotate is not None:
+                self.annotate.remove()
+            self.annotate = patches.Rectangle((x1, y1), x2-x1, y2-y1, linewidth=1, edgecolor='red', facecolor='none')
+            self.ax.add_patch(self.annotate)
+            self.canvas.draw()
+            self.coords1 = None
+            self.coords2 = None
     
     def drawrect(self):
         current_time = time.time()
@@ -350,6 +378,13 @@ class DisplayWindow(tk.Toplevel):
             if len(temp) > 0:
                 pixels.append(np.mean(temp))
         return pixels
+    
+    def get_area(self, x1, y1, x2, y2):
+        area = []
+        x1, x2 = sorted([x1, x2])
+        y1, y2 = sorted([y1, y2])
+        area = self.image[y1:y2, x1:x2]
+        return area
         
     def save(self):
         file_path = filedialog.asksaveasfilename(defaultextension=".fit", filetypes=[("FITS Files", "*.fits, *.fit")])
@@ -493,7 +528,7 @@ class Graph(tk.Toplevel):
         self.create_widget()
         
     def create_widget(self):
-        options = ['Line', 'Horizontal Box']
+        options = ['Line', 'Horizontal Box', 'Area']
         self.control_frame1 = tk.Frame(self)
         self.control_frame1.pack(side=tk.TOP, fill=tk.X)
 
@@ -502,7 +537,6 @@ class Graph(tk.Toplevel):
         
         self.graph_type_label = tk.Label(self.control_frame1, text="Graph Type:")
         self.graph_type_label.pack(side=tk.LEFT, fill=tk.X)
-
 
         self.graph_type = ttk.Combobox(self.control_frame1, values=options)
         self.figure, self.ax = plt.subplots()
@@ -515,14 +549,24 @@ class Graph(tk.Toplevel):
         self.save_button.pack(side=tk.LEFT)
 
     def update_graph(self, data):
-        self.figure.clear()
-        self.data = data
-        self.ax = self.figure.add_subplot(111)
-        self.ax.plot(data)
-        self.ax.set_title("Graph")
-        self.ax.set_xlabel("X-axis")
-        self.ax.set_ylabel("Y-axis")
-        self.canvas.draw()
+        if self.graph_type.get() == "Line" or self.graph_type.get() == "Horizontal Box":
+            self.figure.clear()
+            self.data = data
+            self.ax = self.figure.add_subplot(111)
+            self.ax.plot(data)
+            self.ax.set_title("Graph")
+            self.ax.set_xlabel("X-axis")
+            self.ax.set_ylabel("Y-axis")
+            self.canvas.draw()
+        elif self.graph_type.get() == "Area":
+            self.figure.clear()
+            self.data = data
+            self.ax = self.figure.add_subplot(111)
+            self.ax.imshow(data, cmap='viridis', interpolation='nearest')
+            self.ax.set_title("Graph")
+            self.ax.set_xlabel("X-axis")
+            self.ax.set_ylabel("Y-axis")
+            self.canvas.draw()
         
     def close(self):
         self.parent.graph_window = None
