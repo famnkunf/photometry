@@ -220,6 +220,8 @@ class DisplayWindow(tk.Toplevel):
                 self.drawing_line = True
             else:
                 self.drawing_line = False
+        else:
+            self.drawing_line = False
 
     def start_pan(self, event):
         if event.button == 1:
