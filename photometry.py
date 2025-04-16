@@ -40,6 +40,10 @@ class TopWindow(tk.Tk):
         self.graph_button = tk.Button(self, text="Graph", command=self.show_graph)
         self.graph_button.pack(side=tk.LEFT)
         
+        self.histogram_button = tk.Button(self, text="Histogram", command=self.show_histogram)
+        self.histogram_button.pack(side=tk.LEFT)
+        
+        
     def open_calculator(self):
         if self.calculator_window:
             self.calculator_window.focus()
@@ -85,6 +89,12 @@ class TopWindow(tk.Tk):
             self.graph_window = Graph(self)
             self.graph_window.protocol("WM_DELETE_WINDOW", self.graph_window.close)
 
+    def show_histogram(self):
+        if self.graph_window:
+            self.graph_window.focus()
+        else:
+            self.histogram_window = Histogram(self)
+            self.histogram_window.protocol("WM_DELETE_WINDOW", self.histogram_window.close)
 class DisplayWindow(tk.Toplevel):
     def __init__(self, image, header, title, parent:TopWindow=None):
         super().__init__()
@@ -94,7 +104,7 @@ class DisplayWindow(tk.Toplevel):
         self.header = header
         self.parent = parent
         self.header_window = None
-        
+        self.norm = ImageNormalize(self.image, stretch=LinearStretch())
         self.pan_start = None
         
         self.create_widget()
@@ -128,7 +138,7 @@ class DisplayWindow(tk.Toplevel):
         self.positionX_label.pack(side=tk.LEFT)
         self.positionY_label = tk.Label(self.control_frame2, text="Y:")
         self.positionY_label.pack(side=tk.LEFT)
-        
+
         self.canvas.mpl_connect("motion_notify_event", self.on_mouse_move)
         self.canvas.mpl_connect('scroll_event', self.on_scroll)
         self.canvas.mpl_connect('button_press_event', self.start_pan)
@@ -146,8 +156,7 @@ class DisplayWindow(tk.Toplevel):
         # self.header_window.mainloop()
 
     def display_image(self):
-        norm = ImageNormalize(self.image, stretch=LinearStretch())
-        self.ax.imshow(self.image, cmap='gray', norm=norm)
+        self.ax.imshow(self.image, cmap='gray', norm=self.norm)
         self.ax.set_title("FITS Image")
         self.ax.set_xlim(0, self.image.shape[1])
         self.ax.set_ylim(0, self.image.shape[0])
@@ -397,7 +406,6 @@ class Calculator(tk.Toplevel):
         available_image = [window.title() for window in self.parent.display_windows]
         for i in event.widget.master.winfo_children():
             if isinstance(i, tk.Label):
-                print(i.cget("text"))
                 r = re.compile(r'Variable \$(\d+)')
                 match = r.search(i.cget("text"))
         if match:
@@ -463,6 +471,116 @@ class Graph(tk.Toplevel):
     def close(self):
         self.parent.graph_window = None
         self.destroy()
+        
+class Histogram(tk.Toplevel):
+    def __init__(self, parent: TopWindow=None):
+        super().__init__()
+        self.parent = parent
+        self.title("Histogram")
+        self.geometry("400x300")
+        self.parent.histogram_window = self
+        
+        self.mean = None
+        self.sigma = None
+        self.vmin = tk.IntVar()
+        self.vmax = tk.IntVar()
+        self.selected_window = None
+        self.scatter_plot = None
+        
+        self.create_widget()
+        
+    def create_widget(self):
+        self.control_frame1 = tk.Frame(self)
+        self.control_frame1.pack(side=tk.TOP, fill=tk.X)
+        self.control_frame2 = tk.Frame(self)
+        self.control_frame2.pack(side=tk.BOTTOM, fill=tk.X)    
+        self.control_frame3 = tk.Frame(self)
+        self.control_frame3.pack(side=tk.BOTTOM, fill=tk.X)
+        
+        self.display_window_select = ttk.Combobox(self.control_frame1, values=[window.title() for window in self.parent.display_windows])
+        self.display_window_select.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        self.display_window_select.bind("<ButtonPress-1>", self.update_selections)
+        self.display_window_select.bind("<<ComboboxSelected>>", self.update_selected_window)
+        
+        self.compute_button = tk.Button(self.control_frame1, text="Compute", command=self.compute)
+        self.compute_button.config(state=tk.DISABLED)
+        self.compute_button.pack(side=tk.LEFT)
+        
+        self.select_range_slider1 = tk.Scale(self.control_frame2, from_=0, to=100, orient=tk.HORIZONTAL, label="Vmin", resolution=0.1, variable=self.vmin, repeatinterval=1000, command=self.update_range)
+        self.select_range_slider1.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        self.select_range_slider1.set(0)
+        self.select_range_slider1.config(state=tk.DISABLED)
+        self.select_range_slider1.bind("<ButtonRelease-1>", self.update_norm)
+        
+        self.select_range_slider2 = tk.Scale(self.control_frame2, from_=0, to=100, orient=tk.HORIZONTAL, label="Vmax", resolution=0.1, variable=self.vmax, repeatinterval=1000, command=self.update_range)
+        self.select_range_slider2.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        self.select_range_slider2.set(0)
+        self.select_range_slider2.config(state=tk.DISABLED)
+        self.select_range_slider2.bind("<ButtonRelease-1>", self.update_norm)
+        
+        self.figure, self.ax = plt.subplots()
+        self.canvas = FigureCanvasTkAgg(self.figure, master=self)
+        self.canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+        self.canvas.draw()
+        self.attributes("-topmost", True)
+        
+    def update_selections(self, event):
+        available_image = [window.title() for window in self.parent.display_windows]
+        event.widget['values'] = available_image
+        event.widget.set(event.widget.get())
+
+    def update_selected_window(self, event):
+        selected_window = event.widget.get()
+        available_image = [window.title() for window in self.parent.display_windows]
+        self.selected_window = self.parent.display_windows[available_image.index(selected_window)]
+        self.compute_button.config(state=tk.NORMAL)
+        
+        self.ax.clear()
+    
+    def update_range(self, event):
+        if self.vmin.get() > self.vmax.get():
+            self.vmin.set(self.vmax.get())
+        self.scatter_plot[0].remove()
+        self.scatter_plot[1].remove()
+        self.scatter_plot = (self.ax.scatter(self.vmin.get(), 0, color='red', label='VMin', marker='x'), self.ax.scatter(self.vmax.get(), 0, color='green', label='VMax', marker='x'))
+        self.canvas.draw()
+    
+    def update_norm(self, event):
+        if self.vmin.get() > self.vmax.get():
+            self.vmin.set(self.vmax.get())
+        self.selected_window.norm.vmin = self.vmin.get()
+        self.selected_window.norm.vmax = self.vmax.get()
+        self.selected_window.canvas.draw()
+    
+    def compute(self):
+        self.data = self.selected_window.image.flatten()
+        self.sigma = np.std(self.selected_window.image.flatten())
+        self.mean = np.mean(self.selected_window.image.flatten())
+        self.min_value = self.mean - self.sigma
+        self.vmin.set(self.min_value)
+        self.max_value = self.mean + self.sigma
+        self.vmax.set(self.max_value)
+        self.select_range_slider1.config(state=tk.NORMAL)
+        self.select_range_slider1.config(from_=self.min_value, to=self.max_value)
+        self.select_range_slider1.set(self.mean)
+        self.select_range_slider2.config(state=tk.NORMAL)
+        self.select_range_slider2.config(from_=self.min_value, to=self.max_value)
+        self.select_range_slider2.set(self.mean)
+        self.plot_histogram(self.data)        
+    
+    def plot_histogram(self, data):
+        self.ax.clear()
+        self.ax.hist(data, bins=256, color='blue', alpha=0.7, range=(self.min_value, self.max_value))
+        self.scatter_plot = (self.ax.scatter(self.vmin.get(), 0, color='red', label='VMin', marker='x'), self.ax.scatter(self.vmax.get(), 0, color='green', label='VMax', marker='x'))
+        self.ax.set_title("Histogram")
+        self.ax.set_xlabel("Pixel Value")
+        self.ax.set_ylabel("Frequency")
+        self.canvas.draw()
+    
+    def close(self):
+        self.parent.histogram_window = None
+        self.destroy()
+    
 if __name__ == "__main__":
     # mpl.rcParams['path.simplify'] = True
     # mpl.rcParams['path.simplify_threshold'] = 1.0
