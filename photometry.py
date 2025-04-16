@@ -109,7 +109,11 @@ class DisplayWindow(tk.Toplevel):
         self.header_window = None
         self.norm = ImageNormalize(self.image, stretch=LinearStretch())
         self.pan_start = None
-                
+        self.adding_aperture = False
+        self.aperture_window = None
+        self.added_apertures = []
+        self.aperture = ()
+        
         self.create_widget()
 
     def create_widget(self):
@@ -136,6 +140,9 @@ class DisplayWindow(tk.Toplevel):
         
         self.save_button = tk.Button(self.control_frame1, text="Save", command=self.save)
         self.save_button.pack(side=tk.LEFT)
+        
+        self.add_aperture_button = tk.Button(self.control_frame1, text="Add Aperture", command=self.add_aperture)
+        self.add_aperture_button.pack(side=tk.LEFT)
         
         self.positionX_label = tk.Label(self.control_frame2, text="X:")
         self.positionX_label.pack(side=tk.LEFT)
@@ -168,6 +175,16 @@ class DisplayWindow(tk.Toplevel):
         self.ax.set_yticks([])
         self.canvas.draw()
         
+    def add_aperture(self):
+        self.adding_aperture = not self.adding_aperture
+        if self.add_aperture:
+            self.add_aperture_button.config(relief="sunken")
+            self.aperture_window = Aperture(self)
+            self.aperture_window.protocol("WM_DELETE_WINDOW", self.aperture_window.close)
+        else:
+            self.add_aperture_button.config(relief="raised")
+            self.aperture_window.close()
+        
     def on_mouse_move(self, event):
         if event.xdata is not None and event.ydata is not None:
             x, y = int(event.xdata), int(event.ydata)
@@ -179,24 +196,39 @@ class DisplayWindow(tk.Toplevel):
                 self.parent.information_window.pixel_value_label.config(text=f"Pixel Value: {pixel_value}")
             self.positionX_label.config(text=f"X: {x}")
             self.positionY_label.config(text=f"Y: {y}")
-            if self.drawing_type == "Line":
-                if self.coords1 is not None and self.coords2 is None:
-                    self.coords2 = (event.xdata, event.ydata)
-                    temp = self.coords1
-                    self.drawline()
-                    self.coords1 = temp
-            elif self.drawing_type == "Horizontal Box":
-                if self.coords1 is not None and self.coords2 is None:
-                    self.coords2 = (event.xdata, event.ydata)
-                    temp = self.coords1
-                    self.drawrect()
-                    self.coords1 = temp
-            elif self.drawing_type == "Area":
-                if self.coords1 is not None and self.coords2 is None:
-                    self.coords2 = (event.xdata, event.ydata)
-                    temp = self.coords1
-                    self.drawarea()
-                    self.coords1 = temp
+            if self.adding_aperture:
+                a = float(self.aperture_window.aperture_major.get())
+                b = float(self.aperture_window.aperture_minor.get())
+                gap = float(self.aperture_window.gap.get())
+                angle = float(self.aperture_window.aperture_angle.get())
+                background = float(self.aperture_window.background.get())
+                p = patches.Ellipse((x, y), a, b, angle=angle, color='red', fill=False, lw=1)
+                g = patches.Ellipse((x, y), a+gap, b+gap, angle=angle, color='red', fill=False, lw=1, linestyle='dashed')
+                bg = patches.Ellipse((x, y), a+gap+background, b+gap+background, angle=angle, color='blue', fill=False, lw=1, linestyle='dashed')
+                if len(self.aperture) > 0:
+                    [i.remove() for i in self.aperture]
+                self.aperture = (p, g, bg)
+                [self.ax.add_patch(i) for i in self.aperture]
+                self.canvas.draw()              
+            else:
+                if self.drawing_type == "Line":
+                    if self.coords1 is not None and self.coords2 is None:
+                        self.coords2 = (event.xdata, event.ydata)
+                        temp = self.coords1
+                        self.drawline()
+                        self.coords1 = temp
+                elif self.drawing_type == "Horizontal Box":
+                    if self.coords1 is not None and self.coords2 is None:
+                        self.coords2 = (event.xdata, event.ydata)
+                        temp = self.coords1
+                        self.drawrect()
+                        self.coords1 = temp
+                elif self.drawing_type == "Area":
+                    if self.coords1 is not None and self.coords2 is None:
+                        self.coords2 = (event.xdata, event.ydata)
+                        temp = self.coords1
+                        self.drawarea()
+                        self.coords1 = temp
         
     def on_scroll(self, event):
         base_scale = 1.2
@@ -233,6 +265,9 @@ class DisplayWindow(tk.Toplevel):
         if self.parent.graph_window:
             self.drawing_type = self.parent.graph_window.graph_type.get()
         else:
+            if self.annotate:
+                self.annotate.remove()
+                self.annotate = None
             self.drawing_type = False
 
     def start_pan(self, event):
@@ -242,19 +277,32 @@ class DisplayWindow(tk.Toplevel):
             
     def stop_pan(self, event):
         if event.button == 1:
-            if not self.drawing_type:
-                self.pan_start = None
+            if self.adding_aperture:
+                if len(self.aperture) > 0:
+                    for i in self.aperture:
+                        i.remove()
+                        i.set_color('yellow')
+                        self.ax.add_patch(i)
+                    self.added_apertures.append(self.aperture)
+                    self.aperture = ()
+                    self.aperture_window.close()
+                    self.add_aperture_button.config(relief="raised")
+                    self.adding_aperture = False
+                    self.canvas.draw()
             else:
-                if self.coords1 is None and event.xdata is not None and event.ydata is not None:
-                    self.coords1 = (event.xdata, event.ydata)
-                elif self.coords2 is None and event.xdata is not None and event.ydata is not None:
-                    self.coords2 = (event.xdata, event.ydata)
-                    if self.drawing_type == "Horizontal Box":
-                        self.drawrect()
-                    elif self.drawing_type == "Line":
-                        self.drawline()
-                    elif self.drawing_type == "Area":
-                        self.drawarea()
+                if not self.drawing_type:
+                    self.pan_start = None
+                else:
+                    if self.coords1 is None and event.xdata is not None and event.ydata is not None:
+                        self.coords1 = (event.xdata, event.ydata)
+                    elif self.coords2 is None and event.xdata is not None and event.ydata is not None:
+                        self.coords2 = (event.xdata, event.ydata)
+                        if self.drawing_type == "Horizontal Box":
+                            self.drawrect()
+                        elif self.drawing_type == "Line":
+                            self.drawline()
+                        elif self.drawing_type == "Area":
+                            self.drawarea()
     
     def drawarea(self):
         current_time = time.time()
@@ -578,6 +626,7 @@ class Graph(tk.Toplevel):
             df = pd.DataFrame(self.data)
             df.to_csv(file_path, index=False)
             messagebox.showinfo("Saved", f"Data saved to {file_path}")
+
 class Histogram(tk.Toplevel):
     def __init__(self, parent: TopWindow=None):
         super().__init__()
@@ -685,6 +734,69 @@ class Histogram(tk.Toplevel):
     
     def close(self):
         self.parent.histogram_window = None
+        self.destroy()
+        
+class Aperture(tk.Toplevel):
+    def __init__(self, parent: DisplayWindow=None):
+        super().__init__()
+        self.parent = parent
+        self.title(self.parent.title())
+        self.parent.aperture_window = self
+        self.geometry("400x300")
+        self.attributes("-topmost", True)
+        
+        self.create_widget()
+        
+    def create_widget(self):
+        self.control_frame1 = tk.Frame(self)
+        self.control_frame1.pack(side=tk.TOP, fill=tk.X)
+        self.control_frame2 = tk.Frame(self)
+        self.control_frame2.pack(side=tk.TOP, fill=tk.X)
+        self.control_frame3 = tk.Frame(self)
+        self.control_frame3.pack(side=tk.TOP, fill=tk.X)
+        self.control_frame4 = tk.Frame(self)
+        self.control_frame4.pack(side=tk.TOP, fill=tk.X)
+        self.control_frame5 = tk.Frame(self)
+        self.control_frame5.pack(side=tk.TOP, fill=tk.X)
+        
+        self.aperture_major_label = tk.Label(self.control_frame1, text="Aperture Major axis:")
+        self.aperture_major_label.pack(side=tk.TOP, fill=tk.X)
+        self.aperture_major = tk.Entry(self.control_frame1)
+        self.aperture_major.pack(side=tk.TOP, fill=tk.X)
+        self.aperture_major.insert(0, "20")
+
+        self.aperture_minor_label = tk.Label(self.control_frame2, text="Aperture Minor axis:")        
+        self.aperture_minor_label.pack(side=tk.TOP, fill=tk.X)
+        self.aperture_minor = tk.Entry(self.control_frame2)
+        self.aperture_minor.pack(side=tk.TOP, fill=tk.X)
+        self.aperture_minor.insert(0, "20")
+        
+        self.aperture_angle_label = tk.Label(self.control_frame3, text="Aperture Angle:")
+        self.aperture_angle_label.pack(side=tk.TOP, fill=tk.X)
+        self.aperture_angle = tk.Entry(self.control_frame3)
+        self.aperture_angle.pack(side=tk.TOP, fill=tk.X)        
+        self.aperture_angle.insert(0, "0")
+        
+        self.gap_label = tk.Label(self.control_frame4, text="Gap:")
+        self.gap_label.pack(side=tk.TOP, fill=tk.X)
+        self.gap = tk.Entry(self.control_frame4)
+        self.gap.pack(side=tk.TOP, fill=tk.X)
+        self.gap.insert(0, "10")
+        
+        self.background_label = tk.Label(self.control_frame5, text="Background:")
+        self.background_label.pack(side=tk.TOP, fill=tk.X)
+        self.background = tk.Entry(self.control_frame5)
+        self.background.pack(side=tk.TOP, fill=tk.X)
+        self.background.insert(0, "10")
+        
+    def close(self):
+        self.parent.aperture_window = None
+        self.parent.adding_aperture = False
+        if len(self.parent.aperture) > 0:
+            [i.remove() for i in self.parent.aperture]
+            self.parent.aperture = ()
+            self.parent.canvas.draw()
+            self.parent.add_aperture_button.config(relief="raised")
         self.destroy()
     
 if __name__ == "__main__":
