@@ -6,16 +6,19 @@ from astropy.visualization import ImageNormalize, LinearStretch
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-from photutils.aperture import CircularAperture, CircularAnnulus, aperture_photometry
+from matplotlib import patches
+# from photutils.aperture import CircularAperture, CircularAnnulus, aperture_photometry
 import numpy as np
 import regex as re
 import time
+import threading
+import pandas as pd
 
 class TopWindow(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("Photometry Tool")
-        self.geometry("800x100")
+        self.geometry("800x50")
         self.attributes("-topmost", True)
         self.create_widget()
         self.display_windows = []
@@ -28,19 +31,19 @@ class TopWindow(tk.Tk):
         self.control_frame = tk.Frame(self)
         self.control_frame.pack(side=tk.TOP, fill=tk.X)
         
-        self.open_data_button = tk.Button(self, text="Open FITS File", command=self.open_fits_file)
+        self.open_data_button = tk.Button(self.control_frame, text="Open FITS File", command=self.open_fits_file)
         self.open_data_button.pack(side=tk.LEFT)
         
-        self.information_button = tk.Button(self, text="Information", command=self.show_information)
+        self.information_button = tk.Button(self.control_frame, text="Information", command=self.show_information)
         self.information_button.pack(side=tk.LEFT)
         
-        self.calculator_button = tk.Button(self, text="Calculator", command=self.open_calculator)
+        self.calculator_button = tk.Button(self.control_frame, text="Calculator", command=self.open_calculator)
         self.calculator_button.pack(side=tk.LEFT)
         
-        self.graph_button = tk.Button(self, text="Graph", command=self.show_graph)
+        self.graph_button = tk.Button(self.control_frame, text="Graph", command=self.show_graph)
         self.graph_button.pack(side=tk.LEFT)
         
-        self.histogram_button = tk.Button(self, text="Histogram", command=self.show_histogram)
+        self.histogram_button = tk.Button(self.control_frame, text="Histogram", command=self.show_histogram)
         self.histogram_button.pack(side=tk.LEFT)
         
         
@@ -106,7 +109,7 @@ class DisplayWindow(tk.Toplevel):
         self.header_window = None
         self.norm = ImageNormalize(self.image, stretch=LinearStretch())
         self.pan_start = None
-        
+                
         self.create_widget()
 
     def create_widget(self):
@@ -115,13 +118,13 @@ class DisplayWindow(tk.Toplevel):
         self.canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
         self.canvas.draw()
         self.display_image()
-        self.drawing_line = False
-        self.line_start = None
-        self.line_stop = None
-        self.line = None
-        self.line_data = None
+        self.drawing_type = False
+        self.coords1 = None
+        self.coords2 = None
+        self.annotate = None
+        self.data = None
         self.last_update_time = time.time()
-        self.target_interval = 1/30
+        self.target_interval = 1/10
         
         self.control_frame1 = tk.Frame(self)
         self.control_frame1.pack(side=tk.TOP, fill=tk.X)
@@ -176,12 +179,18 @@ class DisplayWindow(tk.Toplevel):
                 self.parent.information_window.pixel_value_label.config(text=f"Pixel Value: {pixel_value}")
             self.positionX_label.config(text=f"X: {x}")
             self.positionY_label.config(text=f"Y: {y}")
-            if self.drawing_line:
-                if self.line_start is not None and self.line_stop is None:
-                    self.line_stop = (event.xdata, event.ydata)
-                    temp = self.line_start
+            if self.drawing_type == "Line":
+                if self.coords1 is not None and self.coords2 is None:
+                    self.coords2 = (event.xdata, event.ydata)
+                    temp = self.coords1
                     self.drawline()
-                    self.line_start = temp
+                    self.coords1 = temp
+            elif self.drawing_type == "Horizontal Box":
+                if self.coords1 is not None and self.coords2 is None:
+                    self.coords2 = (event.xdata, event.ydata)
+                    temp = self.coords1
+                    self.drawrect()
+                    self.coords1 = temp
         
     def on_scroll(self, event):
         base_scale = 1.2
@@ -216,45 +225,67 @@ class DisplayWindow(tk.Toplevel):
 
     def on_focus(self, event):
         if self.parent.graph_window:
-            if self.parent.graph_window.graph_type.get() == "Line":
-                self.drawing_line = True
-            else:
-                self.drawing_line = False
+            self.drawing_type = self.parent.graph_window.graph_type.get()
         else:
-            self.drawing_line = False
+            self.drawing_type = False
 
     def start_pan(self, event):
         if event.button == 1:
-            if not self.drawing_line:
+            if not self.drawing_type:
                 self.pan_start = (event.x, event.y)
             
     def stop_pan(self, event):
         if event.button == 1:
-            if not self.drawing_line:
+            if not self.drawing_type:
                 self.pan_start = None
             else:
-                if self.line_start is None and event.xdata is not None and event.ydata is not None:
-                    self.line_start = (event.xdata, event.ydata)
-                elif self.line_stop is None and event.xdata is not None and event.ydata is not None:
-                    self.line_stop = (event.xdata, event.ydata)
-                    self.drawline()
-            
+                if self.coords1 is None and event.xdata is not None and event.ydata is not None:
+                    self.coords1 = (event.xdata, event.ydata)
+                elif self.coords2 is None and event.xdata is not None and event.ydata is not None:
+                    self.coords2 = (event.xdata, event.ydata)
+                    if self.drawing_type == "Horizontal Box":
+                        self.drawrect()
+                    elif self.drawing_type == "Line":
+                        self.drawline()
+    
+    def drawrect(self):
+        current_time = time.time()
+        
+        if self.coords1 and self.coords2:
+            if self.parent.graph_window:
+                if current_time - self.last_update_time > self.target_interval:
+                    self.data = self.get_pixels_inside_box(int(self.coords1[0]), int(self.coords1[1]), int(self.coords2[0]), int(self.coords2[1]))
+                    self.parent.graph_window.update_graph(self.data)
+                self.last_update_time = current_time
+            x1 = int(self.coords1[0])
+            y1 = int(self.coords1[1])
+            x2 = int(self.coords2[0])
+            y2 = int(self.coords2[1])
+            if self.annotate:
+                self.annotate.remove()
+            self.annotate = patches.Rectangle((x1, y1), x2-x1, y2-y1, linewidth=1, edgecolor='red', facecolor='none')
+            self.ax.add_patch(self.annotate)
+            self.canvas.draw()
+            self.coords1 = None
+            self.coords2 = None
+
     def drawline(self):
         current_time = time.time()
-        if current_time - self.last_update_time > self.target_interval:
-            if self.line_start and self.line_stop:
-                if self.parent.graph_window:
-                    self.line_data = self.get_pixels_along_line(int(self.line_start[0]), int(self.line_start[1]), int(self.line_stop[0]), int(self.line_stop[1]))
-                    self.parent.graph_window.update_graph(self.line_data)
-                x = [self.line_start[0], self.line_stop[0]]
-                y = [self.line_start[1], self.line_stop[1]]
-                if self.line is not None:
-                    self.line[0].remove()
-                self.line = self.ax.plot(x, y, color='red', linewidth=1.5)
-                self.canvas.draw()
-                self.line_start = None
-                self.line_stop = None
-            self.last_update_time = current_time    
+        
+        if self.coords1 and self.coords2:
+            if self.parent.graph_window:
+                if current_time - self.last_update_time > self.target_interval:
+                    self.data = self.get_pixels_along_line(int(self.coords1[0]), int(self.coords1[1]), int(self.coords2[0]), int(self.coords2[1]))
+                    self.parent.graph_window.update_graph(self.data)
+                self.last_update_time = current_time    
+            x = [self.coords1[0], self.coords2[0]]
+            y = [self.coords1[1], self.coords2[1]]
+            if self.annotate is not None:
+                self.annotate.remove()
+            self.annotate = self.ax.plot(x, y, color='red', linewidth=1.5)[0]
+            self.canvas.draw()
+            self.coords1 = None
+            self.coords2 = None
         
     def on_pan(self, event):
         if self.pan_start is None or event.button != 1:
@@ -307,6 +338,18 @@ class DisplayWindow(tk.Toplevel):
                 cy += sy
         return pixels
 
+    def get_pixels_inside_box(self, x1, y1, x2, y2):
+        pixels = []
+        x1, x2 = sorted([x1, x2])
+        y1, y2 = sorted([y1, y2])
+        for x in range(x1, x2):
+            temp = []
+            for y in range(y1, y2):
+                if 0 <= x < self.image.shape[1] and 0 <= y < self.image.shape[0]:
+                    temp.append(self.image[y, x])
+            if len(temp) > 0:
+                pixels.append(np.mean(temp))
+        return pixels
         
     def save(self):
         file_path = filedialog.asksaveasfilename(defaultextension=".fit", filetypes=[("FITS Files", "*.fits, *.fit")])
@@ -446,14 +489,21 @@ class Graph(tk.Toplevel):
         self.title("Graph")
         self.geometry("400x300")
         self.attributes("-topmost", True)        
+        self.data = None
         self.create_widget()
         
     def create_widget(self):
-        options = ['Line']
+        options = ['Line', 'Horizontal Box']
         self.control_frame1 = tk.Frame(self)
         self.control_frame1.pack(side=tk.TOP, fill=tk.X)
+
+        self.control_frame2 = tk.Frame(self)
+        self.control_frame2.pack(side=tk.BOTTOM, fill=tk.X)
+        
         self.graph_type_label = tk.Label(self.control_frame1, text="Graph Type:")
         self.graph_type_label.pack(side=tk.LEFT, fill=tk.X)
+
+
         self.graph_type = ttk.Combobox(self.control_frame1, values=options)
         self.figure, self.ax = plt.subplots()
         self.graph_type.pack(side=tk.LEFT, expand=True)
@@ -461,8 +511,12 @@ class Graph(tk.Toplevel):
         self.canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
         self.canvas.draw()
         
+        self.save_button = tk.Button(self.control_frame2, text="Save", command=self.save)
+        self.save_button.pack(side=tk.LEFT)
+
     def update_graph(self, data):
         self.figure.clear()
+        self.data = data
         self.ax = self.figure.add_subplot(111)
         self.ax.plot(data)
         self.ax.set_title("Graph")
@@ -473,7 +527,13 @@ class Graph(tk.Toplevel):
     def close(self):
         self.parent.graph_window = None
         self.destroy()
-        
+    
+    def save(self):
+        file_path = filedialog.asksaveasfilename(defaultextension=".csv", filetypes=[("CSV files", "*.csv")])
+        if file_path:
+            df = pd.DataFrame(self.data)
+            df.to_csv(file_path, index=False)
+            messagebox.showinfo("Saved", f"Data saved to {file_path}")
 class Histogram(tk.Toplevel):
     def __init__(self, parent: TopWindow=None):
         super().__init__()
