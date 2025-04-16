@@ -4,10 +4,12 @@ from tkinter import filedialog, messagebox
 from astropy.io import fits
 from astropy.visualization import ImageNormalize, LinearStretch
 import matplotlib.pyplot as plt
+import matplotlib as mpl
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from photutils.aperture import CircularAperture, CircularAnnulus, aperture_photometry
 import numpy as np
 import regex as re
+import time
 
 class TopWindow(tk.Tk):
     def __init__(self):
@@ -84,7 +86,7 @@ class TopWindow(tk.Tk):
             self.graph_window.protocol("WM_DELETE_WINDOW", self.graph_window.close)
 
 class DisplayWindow(tk.Toplevel):
-    def __init__(self, image, header, title, parent=None):
+    def __init__(self, image, header, title, parent:TopWindow=None):
         super().__init__()
         self.title(title)
         self.geometry("800x600")
@@ -103,6 +105,13 @@ class DisplayWindow(tk.Toplevel):
         self.canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
         self.canvas.draw()
         self.display_image()
+        self.drawing_line = False
+        self.line_start = None
+        self.line_stop = None
+        self.line = None
+        self.line_data = None
+        self.last_update_time = time.time()
+        self.target_interval = 1/30
         
         self.control_frame1 = tk.Frame(self)
         self.control_frame1.pack(side=tk.TOP, fill=tk.X)
@@ -111,6 +120,9 @@ class DisplayWindow(tk.Toplevel):
         
         self.header_button = tk.Button(self.control_frame1, text="Show Header", command=self.show_header)
         self.header_button.pack(side=tk.LEFT)
+        
+        self.save_button = tk.Button(self.control_frame1, text="Save", command=self.save)
+        self.save_button.pack(side=tk.LEFT)
         
         self.positionX_label = tk.Label(self.control_frame2, text="X:")
         self.positionX_label.pack(side=tk.LEFT)
@@ -122,6 +134,8 @@ class DisplayWindow(tk.Toplevel):
         self.canvas.mpl_connect('button_press_event', self.start_pan)
         self.canvas.mpl_connect('button_release_event', self.stop_pan)
         self.canvas.mpl_connect('motion_notify_event', self.on_pan)
+        
+        self.bind("<Button-1>", self.on_focus)
         
     def show_header(self):
         if self.header is not None:
@@ -145,11 +159,20 @@ class DisplayWindow(tk.Toplevel):
     def on_mouse_move(self, event):
         if event.xdata is not None and event.ydata is not None:
             x, y = int(event.xdata), int(event.ydata)
-            pixel_value = self.image[y, x]
+            try:
+                pixel_value = self.image[y, x]
+            except IndexError:
+                pixel_value = None
             if self.parent.information_window:
                 self.parent.information_window.pixel_value_label.config(text=f"Pixel Value: {pixel_value}")
             self.positionX_label.config(text=f"X: {x}")
             self.positionY_label.config(text=f"Y: {y}")
+            if self.drawing_line:
+                if self.line_start is not None and self.line_stop is None:
+                    self.line_stop = (event.xdata, event.ydata)
+                    temp = self.line_start
+                    self.drawline()
+                    self.line_start = temp
         
     def on_scroll(self, event):
         base_scale = 1.2
@@ -182,14 +205,46 @@ class DisplayWindow(tk.Toplevel):
         self.ax.set_aspect('equal')
         self.canvas.draw()
 
+    def on_focus(self, event):
+        if self.parent.graph_window:
+            if self.parent.graph_window.graph_type.get() == "Line":
+                self.drawing_line = True
+            else:
+                self.drawing_line = False
+
     def start_pan(self, event):
         if event.button == 1:
-            self.pan_start = (event.x, event.y)
-    
+            if not self.drawing_line:
+                self.pan_start = (event.x, event.y)
+            
     def stop_pan(self, event):
         if event.button == 1:
-            self.pan_start = None
-    
+            if not self.drawing_line:
+                self.pan_start = None
+            else:
+                if self.line_start is None and event.xdata is not None and event.ydata is not None:
+                    self.line_start = (event.xdata, event.ydata)
+                elif self.line_stop is None and event.xdata is not None and event.ydata is not None:
+                    self.line_stop = (event.xdata, event.ydata)
+                    self.drawline()
+            
+    def drawline(self):
+        current_time = time.time()
+        if current_time - self.last_update_time > self.target_interval:
+            if self.line_start and self.line_stop:
+                if self.parent.graph_window:
+                    self.line_data = self.get_pixels_along_line(int(self.line_start[0]), int(self.line_start[1]), int(self.line_stop[0]), int(self.line_stop[1]))
+                    self.parent.graph_window.update_graph(self.line_data)
+                x = [self.line_start[0], self.line_stop[0]]
+                y = [self.line_start[1], self.line_stop[1]]
+                if self.line is not None:
+                    self.line[0].remove()
+                self.line = self.ax.plot(x, y, color='red', linewidth=1.5)
+                self.canvas.draw()
+                self.line_start = None
+                self.line_stop = None
+            self.last_update_time = current_time    
+        
     def on_pan(self, event):
         if self.pan_start is None or event.button != 1:
             return
@@ -218,6 +273,36 @@ class DisplayWindow(tk.Toplevel):
         self.ax.set_ylim(new_ylim)
         self.canvas.draw()
         
+    def get_pixels_along_line(self, x1, y1, x2, y2):
+        pixels = []
+        dx = abs(x2 - x1)
+        dy = abs(y2 - y1)
+        sx = 1 if x1 < x2 else -1
+        sy = 1 if y1 < y2 else -1
+        err = dx - dy
+        cx, cy = x1, y1
+
+        while True:
+            if 0 <= cx < self.image.shape[1] and 0 <= cy < self.image.shape[0]:
+                pixels.append(self.image[cy, cx])
+            if cx == x2 and cy == y2:
+                break
+            e2 = 2 * err
+            if e2 > -dy:
+                err -= dy
+                cx += sx
+            if e2 < dx:
+                err += dx
+                cy += sy
+        return pixels
+
+        
+    def save(self):
+        file_path = filedialog.asksaveasfilename(defaultextension=".fit", filetypes=[("FITS Files", "*.fits, *.fit")])
+        if file_path:
+            fits.writeto(file_path, self.image, header=self.header, overwrite=True)
+            messagebox.showinfo("Saved", f"Image saved to {file_path}")
+        
     def close(self):
         if self.header_window:
             self.header_window.close()
@@ -225,7 +310,7 @@ class DisplayWindow(tk.Toplevel):
         self.destroy()
 
 class InformationWindow(tk.Toplevel):
-    def __init__(self, parent=None):
+    def __init__(self, parent: TopWindow=None):
         super().__init__()
         self.parent = parent
         self.title("Information")
@@ -243,7 +328,7 @@ class InformationWindow(tk.Toplevel):
         self.destroy()
 
 class HeaderWindow(tk.Toplevel):
-    def __init__(self, header, parent=None):
+    def __init__(self, header, parent: DisplayWindow=None):
         super().__init__()
         self.parent = parent
         self.title(self.parent.title())
@@ -265,7 +350,7 @@ class HeaderWindow(tk.Toplevel):
         self.destroy()
 
 class Calculator(tk.Toplevel):
-    def __init__(self, parent=None):
+    def __init__(self, parent: TopWindow=None):
         super().__init__()
         self.parent = parent
         self.title("Calculator")
@@ -345,7 +430,7 @@ class Calculator(tk.Toplevel):
         self.destroy()
     
 class Graph(tk.Toplevel):
-    def __init__(self, parent=None):
+    def __init__(self, parent: TopWindow=None):
         super().__init__()
         self.parent = parent
         self.title("Graph")
@@ -360,11 +445,26 @@ class Graph(tk.Toplevel):
         self.graph_type_label = tk.Label(self.control_frame1, text="Graph Type:")
         self.graph_type_label.pack(side=tk.LEFT, fill=tk.X)
         self.graph_type = ttk.Combobox(self.control_frame1, values=options)
+        self.figure, self.ax = plt.subplots()
         self.graph_type.pack(side=tk.LEFT, expand=True)
+        self.canvas = FigureCanvasTkAgg(self.figure, master=self)
+        self.canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+        self.canvas.draw()
+        
+    def update_graph(self, data):
+        self.figure.clear()
+        self.ax = self.figure.add_subplot(111)
+        self.ax.plot(data)
+        self.ax.set_title("Graph")
+        self.ax.set_xlabel("X-axis")
+        self.ax.set_ylabel("Y-axis")
+        self.canvas.draw()
         
     def close(self):
         self.parent.graph_window = None
         self.destroy()
 if __name__ == "__main__":
+    # mpl.rcParams['path.simplify'] = True
+    # mpl.rcParams['path.simplify_threshold'] = 1.0
     app = TopWindow()
     app.mainloop()
