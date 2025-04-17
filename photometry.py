@@ -548,6 +548,9 @@ class Calculator(tk.Toplevel):
             "#sin(": "np.sin(",
             "#cos(": "np.cos(",
             "#tan(": "np.tan(",
+            "#asin(": "np.arcsin(",
+            "#acos(": "np.arccos(",
+            "#atan(": "np.arctan(",
         }
         for key in self.variables.keys():
             if key in formular:
