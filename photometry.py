@@ -12,6 +12,7 @@ import numpy as np
 import regex as re
 import time
 import pandas as pd
+import skimage
 
 class TopWindow(tk.Tk):
     def __init__(self):
@@ -280,9 +281,11 @@ class DisplayWindow(tk.Toplevel):
         if event.button == 1:
             if self.adding_aperture:
                 if len(self.aperture) > 0:
+                    x, y = self.aperture_window.get_max(self.aperture[0], self.image)
                     for i in self.aperture:
                         i.remove()
                         i.set_color('yellow')
+                        i.set_center((x, y))
                         self.ax.add_patch(i)
                     self.added_apertures.append(self.aperture)
                     self.aperture = ()
@@ -816,6 +819,16 @@ class Aperture(tk.Toplevel):
             self.parent.canvas.draw_idle()
             self.parent.add_aperture_button.config(relief="raised")
         self.destroy()
+        
+    def get_max(self, aperture: patches.Ellipse, image):
+        rr, cc = skimage.draw.ellipse(aperture.center[0], aperture.center[1], aperture.width/2, aperture.height/2, shape=image.shape, rotation=aperture.angle)
+        rr_min = np.min(rr)
+        rr_max = np.max(rr)
+        cc_min = np.min(cc)
+        cc_max = np.max(cc)
+        image = image[cc_min:cc_max, rr_min:rr_max]
+        coords = np.unravel_index(np.argmax(image, axis=None), image.shape)
+        return (coords[1] + rr_min, coords[0] + cc_min)
     
 if __name__ == "__main__":
     # mpl.rcParams['path.simplify'] = True
