@@ -663,14 +663,23 @@ class Histogram(tk.Toplevel):
         self.compute_button.config(state=tk.DISABLED)
         self.compute_button.pack(side=tk.LEFT)
         
+        
         self.select_range_slider1_label = ttk.Label(self.control_frame2, text="VMin:")
+        self.select_range_slider1_label.pack(side=tk.LEFT, fill=tk.X)
+        self.select_range_slider1_entry = ttk.Entry(self.control_frame3, textvariable=self.vmin)
+        self.select_range_slider1_entry.bind("<Return>", self.update_norm)
+        self.select_range_slider1_entry.pack(side=tk.LEFT, expand=True)
         self.select_range_slider1 = ttk.Scale(self.control_frame2, from_=0, to=100, orient=tk.HORIZONTAL, variable=self.vmin, command=self.update_range)
         self.select_range_slider1.pack(side=tk.LEFT, fill=tk.X, expand=True)
         # self.select_range_slider1.set(0)
         self.select_range_slider1.config(state=tk.DISABLED)
         self.select_range_slider1.bind("<ButtonRelease-1>", self.update_norm)
         
-        self.select_range_slider1_label.pack(side=tk.LEFT, fill=tk.X)
+        self.select_range_slider2_label = ttk.Label(self.control_frame2, text="VMax:")
+        self.select_range_slider2_label.pack(side=tk.LEFT, fill=tk.X)
+        self.select_range_slider2_entry = ttk.Entry(self.control_frame3, textvariable=self.vmax)
+        self.select_range_slider2_entry.bind("<Return>", self.update_norm)  
+        self.select_range_slider2_entry.pack(side=tk.LEFT, expand=True)
         self.select_range_slider2 = ttk.Scale(self.control_frame2, from_=0, to=100, orient=tk.HORIZONTAL, variable=self.vmax, command=self.update_range)
         self.select_range_slider2.pack(side=tk.LEFT, fill=tk.X, expand=True)
         # self.select_range_slider2.set(0)
@@ -696,7 +705,7 @@ class Histogram(tk.Toplevel):
         
         self.ax.clear()
     
-    def update_range(self, event):
+    def update_range(self, event=None):
         if self.vmin.get() > self.vmax.get():
             self.vmin.set(self.vmax.get())
         if self.scatter_plot is not None:
