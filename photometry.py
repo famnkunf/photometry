@@ -612,7 +612,8 @@ class Graph(tk.Toplevel):
             self.data = np.array(data)
             self.ax = self.figure.add_subplot(111)
             if data.shape[0] > 1 and data.shape[1] > 1:
-                self.ax.imshow(data, cmap='viridis', interpolation='nearest')
+                t = self.ax.imshow(data, cmap='viridis', interpolation='nearest')
+                self.figure.colorbar(t)
             self.ax.set_title("Graph")
             self.ax.set_xlabel("X-axis")
             self.ax.set_ylabel("Y-axis")
