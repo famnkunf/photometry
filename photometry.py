@@ -504,24 +504,32 @@ class Calculator(tk.Toplevel):
         self.n_variables = 0
 
     def create_widget(self):
-        self.add_new_variable_button = ttk.Button(self, text="Add Variable", command=self.add_new_variable)
+        self.control_frame1 = ttk.Frame(self)
+        self.control_frame1.pack(side=tk.TOP, fill=tk.X)
+        self.control_frame2 = ttk.Frame(self)
+        self.control_frame2.pack(side=tk.TOP, fill=tk.X)
+        self.control_frame3 = ttk.Frame(self)
+        self.control_frame3.pack(side=tk.TOP, fill=tk.X)
+        self.control_frame4 = ttk.Frame(self)
+        self.control_frame4.pack(side=tk.TOP, fill=tk.X)
+        
+        self.add_new_variable_button = ttk.Button(self.control_frame1, text="Add Variable", command=self.add_new_variable)
         self.add_new_variable_button.pack(side=tk.TOP, fill=tk.X)
-        self.formular_label = ttk.Label(self, text="Formula:")
+        self.formular_label = ttk.Label(self.control_frame2, text="Formula:")
         self.formular_label.pack(side=tk.TOP, fill=tk.X)
-        self.formular_entry = ttk.Entry(self)
+        self.formular_entry = tk.Text(self.control_frame2, height=5)
         self.formular_entry.pack(side=tk.TOP, fill=tk.X)
-        self.calculate_button = ttk.Button(self, text="Calculate", command=self.calculate)
+        self.calculate_button = ttk.Button(self.control_frame3, text="Calculate", command=self.calculate)
         self.calculate_button.pack(side=tk.TOP, fill=tk.X)
+        
     
     def add_new_variable(self):
         available_image = [window.title() for window in self.parent.display_windows]
-        control_frame = ttk.Frame(self)
-        control_frame.pack(side=tk.TOP, fill=tk.X)
         
-        select_variable_label = ttk.Label(control_frame, text=f"Variable ${self.n_variables}")
+        select_variable_label = ttk.Label(self.control_frame4, text=f"Variable ${self.n_variables}")
         select_variable_label.pack(side=tk.LEFT)
 
-        select_variable = ttk.Combobox(control_frame, values=available_image)
+        select_variable = ttk.Combobox(self.control_frame4, values=available_image)
         select_variable.pack(side=tk.LEFT, fill=tk.X, expand=True)
         select_variable.bind("<ButtonPress-1>", self.update_selections)
         select_variable.bind("<<ComboboxSelected>>", self.update_variable_name)
@@ -543,7 +551,7 @@ class Calculator(tk.Toplevel):
         if match:
             self.variables[f'${match.group(1)}']['display'] = self.parent.display_windows[available_image.index(event.widget.get())]
     def calculate(self):
-        formular = self.formular_entry.get()
+        formular = self.formular_entry.get("1.0", tk.END)
         replace_dict = {
             "#sqrt(": "np.sqrt(",
             "#log(": "np.log(",
@@ -561,11 +569,18 @@ class Calculator(tk.Toplevel):
         for key in replace_dict.keys():
             if key in formular:
                 formular = formular.replace(key, replace_dict[key])
+        output = re.compile(r'!#(.*)$')
+        formular = output.sub(self.format, formular)    
         try:
-            result = eval(formular)
+            result = exec(formular)
         except Exception as e:
             messagebox.showerror("Error", f"Calculation failed: {e, formular}")
             return
+
+    def format(self, match):
+        return f"self.output({match.group(1)})"
+
+    def output(self, result):
         self.parent.open_display_window(result, None, "Result")
 
     def close(self):
