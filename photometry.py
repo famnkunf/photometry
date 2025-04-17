@@ -11,12 +11,12 @@ from matplotlib import patches
 import numpy as np
 import regex as re
 import time
-import threading
 import pandas as pd
 
 class TopWindow(tk.Tk):
     def __init__(self):
         super().__init__()
+        ttk.Style(self).theme_use("xpnative")
         self.title("Photometry Tool")
         self.geometry("800x50")
         self.attributes("-topmost", True)
@@ -28,22 +28,22 @@ class TopWindow(tk.Tk):
         self.graph_window = None
         
     def create_widget(self):
-        self.control_frame = tk.Frame(self)
+        self.control_frame = ttk.Frame(self)
         self.control_frame.pack(side=tk.TOP, fill=tk.X)
         
-        self.open_data_button = tk.Button(self.control_frame, text="Open FITS File", command=self.open_fits_file)
+        self.open_data_button = ttk.Button(self.control_frame, text="Open FITS File", command=self.open_fits_file)
         self.open_data_button.pack(side=tk.LEFT)
         
-        self.information_button = tk.Button(self.control_frame, text="Information", command=self.show_information)
+        self.information_button = ttk.Button(self.control_frame, text="Information", command=self.show_information)
         self.information_button.pack(side=tk.LEFT)
         
-        self.calculator_button = tk.Button(self.control_frame, text="Calculator", command=self.open_calculator)
+        self.calculator_button = ttk.Button(self.control_frame, text="Calculator", command=self.open_calculator)
         self.calculator_button.pack(side=tk.LEFT)
         
-        self.graph_button = tk.Button(self.control_frame, text="Graph", command=self.show_graph)
+        self.graph_button = ttk.Button(self.control_frame, text="Graph", command=self.show_graph)
         self.graph_button.pack(side=tk.LEFT)
         
-        self.histogram_button = tk.Button(self.control_frame, text="Histogram", command=self.show_histogram)
+        self.histogram_button = ttk.Button(self.control_frame, text="Histogram", command=self.show_histogram)
         self.histogram_button.pack(side=tk.LEFT)
         
         
@@ -120,7 +120,7 @@ class DisplayWindow(tk.Toplevel):
         self.fig, self.ax = plt.subplots()
         self.canvas = FigureCanvasTkAgg(self.fig, master=self)
         self.canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
-        self.canvas.draw()
+        self.canvas.draw_idle()
         self.display_image()
         self.drawing_type = False
         self.coords1 = None
@@ -130,23 +130,23 @@ class DisplayWindow(tk.Toplevel):
         self.last_update_time = time.time()
         self.target_interval = 1/10
         
-        self.control_frame1 = tk.Frame(self)
+        self.control_frame1 = ttk.Frame(self)
         self.control_frame1.pack(side=tk.TOP, fill=tk.X)
-        self.control_frame2 = tk.Frame(self)
+        self.control_frame2 = ttk.Frame(self)
         self.control_frame2.pack(side=tk.TOP, fill=tk.X)
         
-        self.header_button = tk.Button(self.control_frame1, text="Show Header", command=self.show_header)
+        self.header_button = ttk.Button(self.control_frame1, text="Show Header", command=self.show_header)
         self.header_button.pack(side=tk.LEFT)
         
-        self.save_button = tk.Button(self.control_frame1, text="Save", command=self.save)
+        self.save_button = ttk.Button(self.control_frame1, text="Save", command=self.save)
         self.save_button.pack(side=tk.LEFT)
         
-        self.add_aperture_button = tk.Button(self.control_frame1, text="Add Aperture", command=self.add_aperture)
+        self.add_aperture_button = ttk.Button(self.control_frame1, text="Add Aperture", command=self.add_aperture)
         self.add_aperture_button.pack(side=tk.LEFT)
         
-        self.positionX_label = tk.Label(self.control_frame2, text="X:")
+        self.positionX_label = ttk.Label(self.control_frame2, text="X:")
         self.positionX_label.pack(side=tk.LEFT)
-        self.positionY_label = tk.Label(self.control_frame2, text="Y:")
+        self.positionY_label = ttk.Label(self.control_frame2, text="Y:")
         self.positionY_label.pack(side=tk.LEFT)
 
         self.canvas.mpl_connect("motion_notify_event", self.on_mouse_move)
@@ -173,16 +173,16 @@ class DisplayWindow(tk.Toplevel):
         self.ax.set_aspect('equal')
         self.ax.set_xticks([])
         self.ax.set_yticks([])
-        self.canvas.draw()
+        self.canvas.draw_idle()
         
     def add_aperture(self):
         self.adding_aperture = not self.adding_aperture
         if self.add_aperture:
-            self.add_aperture_button.config(relief="sunken")
+            self.add_aperture_button.state(['pressed'])
             self.aperture_window = Aperture(self)
             self.aperture_window.protocol("WM_DELETE_WINDOW", self.aperture_window.close)
         else:
-            self.add_aperture_button.config(relief="raised")
+            self.add_aperture_button.state(['!pressed'])
             self.aperture_window.close()
         
     def on_mouse_move(self, event):
@@ -209,7 +209,7 @@ class DisplayWindow(tk.Toplevel):
                     [i.remove() for i in self.aperture]
                 self.aperture = (p, g, bg)
                 [self.ax.add_patch(i) for i in self.aperture]
-                self.canvas.draw()              
+                self.canvas.draw_idle()              
             else:
                 if self.drawing_type == "Line":
                     if self.coords1 is not None and self.coords2 is None:
@@ -259,7 +259,7 @@ class DisplayWindow(tk.Toplevel):
         self.ax.set_xlim(new_xlim)
         self.ax.set_ylim(new_ylim)
         self.ax.set_aspect('equal')
-        self.canvas.draw()
+        self.canvas.draw_idle()
 
     def on_focus(self, event):
         if self.parent.graph_window:
@@ -274,6 +274,7 @@ class DisplayWindow(tk.Toplevel):
         if event.button == 1:
             if not self.drawing_type:
                 self.pan_start = (event.x, event.y)
+        
             
     def stop_pan(self, event):
         if event.button == 1:
@@ -286,9 +287,9 @@ class DisplayWindow(tk.Toplevel):
                     self.added_apertures.append(self.aperture)
                     self.aperture = ()
                     self.aperture_window.close()
-                    self.add_aperture_button.config(relief="raised")
+                    self.add_aperture_button.state(['!pressed'])
                     self.adding_aperture = False
-                    self.canvas.draw()
+                    self.canvas.draw_idle()
             else:
                 if not self.drawing_type:
                     self.pan_start = None
@@ -320,7 +321,7 @@ class DisplayWindow(tk.Toplevel):
                 self.annotate.remove()
             self.annotate = patches.Rectangle((x1, y1), x2-x1, y2-y1, linewidth=1, edgecolor='red', facecolor='none')
             self.ax.add_patch(self.annotate)
-            self.canvas.draw()
+            self.canvas.draw_idle()
             self.coords1 = None
             self.coords2 = None
     
@@ -341,7 +342,7 @@ class DisplayWindow(tk.Toplevel):
                 self.annotate.remove()
             self.annotate = patches.Rectangle((x1, y1), x2-x1, y2-y1, linewidth=1, edgecolor='red', facecolor='none')
             self.ax.add_patch(self.annotate)
-            self.canvas.draw()
+            self.canvas.draw_idle()
             self.coords1 = None
             self.coords2 = None
 
@@ -359,7 +360,7 @@ class DisplayWindow(tk.Toplevel):
             if self.annotate is not None:
                 self.annotate.remove()
             self.annotate = self.ax.plot(x, y, color='red', linewidth=1.5)[0]
-            self.canvas.draw()
+            self.canvas.draw_idle()
             self.coords1 = None
             self.coords2 = None
         
@@ -389,7 +390,7 @@ class DisplayWindow(tk.Toplevel):
             new_ylim[0] = self.image.shape[0] - (cur_ylim[1] - cur_ylim[0])
         self.ax.set_xlim(new_xlim)
         self.ax.set_ylim(new_ylim)
-        self.canvas.draw()
+        self.canvas.draw_idle()
         
     def get_pixels_along_line(self, x1, y1, x2, y2):
         pixels = []
@@ -500,21 +501,21 @@ class Calculator(tk.Toplevel):
         self.n_variables = 0
 
     def create_widget(self):
-        self.add_new_variable_button = tk.Button(self, text="Add Variable", command=self.add_new_variable)
+        self.add_new_variable_button = ttk.Button(self, text="Add Variable", command=self.add_new_variable)
         self.add_new_variable_button.pack(side=tk.TOP, fill=tk.X)
-        self.formular_label = tk.Label(self, text="Formula:")
+        self.formular_label = ttk.Label(self, text="Formula:")
         self.formular_label.pack(side=tk.TOP, fill=tk.X)
-        self.formular_entry = tk.Entry(self)
+        self.formular_entry = ttk.Entry(self)
         self.formular_entry.pack(side=tk.TOP, fill=tk.X)
-        self.calculate_button = tk.Button(self, text="Calculate", command=self.calculate)
+        self.calculate_button = ttk.Button(self, text="Calculate", command=self.calculate)
         self.calculate_button.pack(side=tk.TOP, fill=tk.X)
     
     def add_new_variable(self):
         available_image = [window.title() for window in self.parent.display_windows]
-        control_frame = tk.Frame(self)
+        control_frame = ttk.Frame(self)
         control_frame.pack(side=tk.TOP, fill=tk.X)
         
-        select_variable_label = tk.Label(control_frame, text=f"Variable ${self.n_variables}")
+        select_variable_label = ttk.Label(control_frame, text=f"Variable ${self.n_variables}")
         select_variable_label.pack(side=tk.LEFT)
 
         select_variable = ttk.Combobox(control_frame, values=available_image)
@@ -533,7 +534,7 @@ class Calculator(tk.Toplevel):
     def update_variable_name(self, event):
         available_image = [window.title() for window in self.parent.display_windows]
         for i in event.widget.master.winfo_children():
-            if isinstance(i, tk.Label):
+            if isinstance(i, ttk.Label):
                 r = re.compile(r'Variable \$(\d+)')
                 match = r.search(i.cget("text"))
         if match:
@@ -577,13 +578,13 @@ class Graph(tk.Toplevel):
         
     def create_widget(self):
         options = ['Line', 'Horizontal Box', 'Area']
-        self.control_frame1 = tk.Frame(self)
+        self.control_frame1 = ttk.Frame(self)
         self.control_frame1.pack(side=tk.TOP, fill=tk.X)
 
-        self.control_frame2 = tk.Frame(self)
+        self.control_frame2 = ttk.Frame(self)
         self.control_frame2.pack(side=tk.BOTTOM, fill=tk.X)
         
-        self.graph_type_label = tk.Label(self.control_frame1, text="Graph Type:")
+        self.graph_type_label = ttk.Label(self.control_frame1, text="Graph Type:")
         self.graph_type_label.pack(side=tk.LEFT, fill=tk.X)
 
         self.graph_type = ttk.Combobox(self.control_frame1, values=options)
@@ -591,9 +592,9 @@ class Graph(tk.Toplevel):
         self.graph_type.pack(side=tk.LEFT, expand=True)
         self.canvas = FigureCanvasTkAgg(self.figure, master=self)
         self.canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
-        self.canvas.draw()
+        self.canvas.draw_idle()
         
-        self.save_button = tk.Button(self.control_frame2, text="Save", command=self.save)
+        self.save_button = ttk.Button(self.control_frame2, text="Save", command=self.save)
         self.save_button.pack(side=tk.LEFT)
 
     def update_graph(self, data):
@@ -605,16 +606,17 @@ class Graph(tk.Toplevel):
             self.ax.set_title("Graph")
             self.ax.set_xlabel("X-axis")
             self.ax.set_ylabel("Y-axis")
-            self.canvas.draw()
+            self.canvas.draw_idle()
         elif self.graph_type.get() == "Area":
             self.figure.clear()
-            self.data = data
+            self.data = np.array(data)
             self.ax = self.figure.add_subplot(111)
-            self.ax.imshow(data, cmap='viridis', interpolation='nearest')
+            if data.shape[0] > 1 and data.shape[1] > 1:
+                self.ax.imshow(data, cmap='viridis', interpolation='nearest')
             self.ax.set_title("Graph")
             self.ax.set_xlabel("X-axis")
             self.ax.set_ylabel("Y-axis")
-            self.canvas.draw()
+            self.canvas.draw_idle()
         
     def close(self):
         self.parent.graph_window = None
@@ -645,11 +647,11 @@ class Histogram(tk.Toplevel):
         self.create_widget()
         
     def create_widget(self):
-        self.control_frame1 = tk.Frame(self)
+        self.control_frame1 = ttk.Frame(self)
         self.control_frame1.pack(side=tk.TOP, fill=tk.X)
-        self.control_frame2 = tk.Frame(self)
+        self.control_frame2 = ttk.Frame(self)
         self.control_frame2.pack(side=tk.BOTTOM, fill=tk.X)    
-        self.control_frame3 = tk.Frame(self)
+        self.control_frame3 = ttk.Frame(self)
         self.control_frame3.pack(side=tk.BOTTOM, fill=tk.X)
         
         self.display_window_select = ttk.Combobox(self.control_frame1, values=[window.title() for window in self.parent.display_windows])
@@ -657,26 +659,28 @@ class Histogram(tk.Toplevel):
         self.display_window_select.bind("<ButtonPress-1>", self.update_selections)
         self.display_window_select.bind("<<ComboboxSelected>>", self.update_selected_window)
         
-        self.compute_button = tk.Button(self.control_frame1, text="Compute", command=self.compute)
+        self.compute_button = ttk.Button(self.control_frame1, text="Compute", command=self.compute)
         self.compute_button.config(state=tk.DISABLED)
         self.compute_button.pack(side=tk.LEFT)
         
-        self.select_range_slider1 = tk.Scale(self.control_frame2, from_=0, to=100, orient=tk.HORIZONTAL, label="Vmin", resolution=0.1, variable=self.vmin, repeatinterval=1000, command=self.update_range)
+        self.select_range_slider1_label = ttk.Label(self.control_frame2, text="VMin:")
+        self.select_range_slider1 = ttk.Scale(self.control_frame2, from_=0, to=100, orient=tk.HORIZONTAL, variable=self.vmin, command=self.update_range)
         self.select_range_slider1.pack(side=tk.LEFT, fill=tk.X, expand=True)
-        self.select_range_slider1.set(0)
+        # self.select_range_slider1.set(0)
         self.select_range_slider1.config(state=tk.DISABLED)
         self.select_range_slider1.bind("<ButtonRelease-1>", self.update_norm)
         
-        self.select_range_slider2 = tk.Scale(self.control_frame2, from_=0, to=100, orient=tk.HORIZONTAL, label="Vmax", resolution=0.1, variable=self.vmax, repeatinterval=1000, command=self.update_range)
+        self.select_range_slider1_label.pack(side=tk.LEFT, fill=tk.X)
+        self.select_range_slider2 = ttk.Scale(self.control_frame2, from_=0, to=100, orient=tk.HORIZONTAL, variable=self.vmax, command=self.update_range)
         self.select_range_slider2.pack(side=tk.LEFT, fill=tk.X, expand=True)
-        self.select_range_slider2.set(0)
+        # self.select_range_slider2.set(0)
         self.select_range_slider2.config(state=tk.DISABLED)
         self.select_range_slider2.bind("<ButtonRelease-1>", self.update_norm)
         
         self.figure, self.ax = plt.subplots()
         self.canvas = FigureCanvasTkAgg(self.figure, master=self)
         self.canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
-        self.canvas.draw()
+        self.canvas.draw_idle()
         self.attributes("-topmost", True)
         
     def update_selections(self, event):
@@ -695,17 +699,18 @@ class Histogram(tk.Toplevel):
     def update_range(self, event):
         if self.vmin.get() > self.vmax.get():
             self.vmin.set(self.vmax.get())
-        self.scatter_plot[0].remove()
-        self.scatter_plot[1].remove()
+        if self.scatter_plot is not None:
+            self.scatter_plot[0].remove()
+            self.scatter_plot[1].remove()
         self.scatter_plot = (self.ax.scatter(self.vmin.get(), 0, color='red', label='VMin', marker='x'), self.ax.scatter(self.vmax.get(), 0, color='green', label='VMax', marker='x'))
-        self.canvas.draw()
+        self.canvas.draw_idle()
     
     def update_norm(self, event):
         if self.vmin.get() > self.vmax.get():
             self.vmin.set(self.vmax.get())
         self.selected_window.norm.vmin = self.vmin.get()
         self.selected_window.norm.vmax = self.vmax.get()
-        self.selected_window.canvas.draw()
+        self.selected_window.canvas.draw_idle()
     
     def compute(self):
         self.data = self.selected_window.image.flatten()
@@ -730,7 +735,7 @@ class Histogram(tk.Toplevel):
         self.ax.set_title("Histogram")
         self.ax.set_xlabel("Pixel Value")
         self.ax.set_ylabel("Frequency")
-        self.canvas.draw()
+        self.canvas.draw_idle()
     
     def close(self):
         self.parent.histogram_window = None
@@ -748,44 +753,44 @@ class Aperture(tk.Toplevel):
         self.create_widget()
         
     def create_widget(self):
-        self.control_frame1 = tk.Frame(self)
+        self.control_frame1 = ttk.Frame(self)
         self.control_frame1.pack(side=tk.TOP, fill=tk.X)
-        self.control_frame2 = tk.Frame(self)
+        self.control_frame2 = ttk.Frame(self)
         self.control_frame2.pack(side=tk.TOP, fill=tk.X)
-        self.control_frame3 = tk.Frame(self)
+        self.control_frame3 = ttk.Frame(self)
         self.control_frame3.pack(side=tk.TOP, fill=tk.X)
-        self.control_frame4 = tk.Frame(self)
+        self.control_frame4 = ttk.Frame(self)
         self.control_frame4.pack(side=tk.TOP, fill=tk.X)
-        self.control_frame5 = tk.Frame(self)
+        self.control_frame5 = ttk.Frame(self)
         self.control_frame5.pack(side=tk.TOP, fill=tk.X)
         
-        self.aperture_major_label = tk.Label(self.control_frame1, text="Aperture Major axis:")
+        self.aperture_major_label = ttk.Label(self.control_frame1, text="Aperture Major axis:")
         self.aperture_major_label.pack(side=tk.TOP, fill=tk.X)
-        self.aperture_major = tk.Entry(self.control_frame1)
+        self.aperture_major = ttk.Entry(self.control_frame1)
         self.aperture_major.pack(side=tk.TOP, fill=tk.X)
         self.aperture_major.insert(0, "20")
 
-        self.aperture_minor_label = tk.Label(self.control_frame2, text="Aperture Minor axis:")        
+        self.aperture_minor_label = ttk.Label(self.control_frame2, text="Aperture Minor axis:")        
         self.aperture_minor_label.pack(side=tk.TOP, fill=tk.X)
-        self.aperture_minor = tk.Entry(self.control_frame2)
+        self.aperture_minor = ttk.Entry(self.control_frame2)
         self.aperture_minor.pack(side=tk.TOP, fill=tk.X)
         self.aperture_minor.insert(0, "20")
         
-        self.aperture_angle_label = tk.Label(self.control_frame3, text="Aperture Angle:")
+        self.aperture_angle_label = ttk.Label(self.control_frame3, text="Aperture Angle:")
         self.aperture_angle_label.pack(side=tk.TOP, fill=tk.X)
-        self.aperture_angle = tk.Entry(self.control_frame3)
+        self.aperture_angle = ttk.Entry(self.control_frame3)
         self.aperture_angle.pack(side=tk.TOP, fill=tk.X)        
         self.aperture_angle.insert(0, "0")
         
-        self.gap_label = tk.Label(self.control_frame4, text="Gap:")
+        self.gap_label = ttk.Label(self.control_frame4, text="Gap:")
         self.gap_label.pack(side=tk.TOP, fill=tk.X)
-        self.gap = tk.Entry(self.control_frame4)
+        self.gap = ttk.Entry(self.control_frame4)
         self.gap.pack(side=tk.TOP, fill=tk.X)
         self.gap.insert(0, "10")
         
-        self.background_label = tk.Label(self.control_frame5, text="Background:")
+        self.background_label = ttk.Label(self.control_frame5, text="Background:")
         self.background_label.pack(side=tk.TOP, fill=tk.X)
-        self.background = tk.Entry(self.control_frame5)
+        self.background = ttk.Entry(self.control_frame5)
         self.background.pack(side=tk.TOP, fill=tk.X)
         self.background.insert(0, "10")
         
@@ -795,7 +800,7 @@ class Aperture(tk.Toplevel):
         if len(self.parent.aperture) > 0:
             [i.remove() for i in self.parent.aperture]
             self.parent.aperture = ()
-            self.parent.canvas.draw()
+            self.parent.canvas.draw_idle()
             self.parent.add_aperture_button.config(relief="raised")
         self.destroy()
     
