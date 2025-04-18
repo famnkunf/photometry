@@ -510,8 +510,19 @@ class Calculator(tk.Toplevel):
         self.control_frame2.pack(side=tk.TOP, fill=tk.X)
         self.control_frame3 = ttk.Frame(self)
         self.control_frame3.pack(side=tk.TOP, fill=tk.X)
-        self.control_frame4 = ttk.Frame(self)
-        self.control_frame4.pack(side=tk.TOP, fill=tk.X)
+        self.canvas = tk.Canvas(self)
+        self.canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self.yscrollbar4 = ttk.Scrollbar(self.canvas, orient=tk.VERTICAL, command=self.canvas.yview)
+        self.yscrollbar4.pack(side=tk.RIGHT, fill=tk.Y)
+        self.canvas.config(yscrollcommand=self.yscrollbar4.set)
+        self.control_frame4 = tk.Frame(self.canvas)
+        self.control_frame4.pack(side=tk.LEFT, fill=tk.X)
+
+        self.control_frame4_id = self.canvas.create_window((0, 0), window=self.control_frame4, anchor=tk.NW, width=self.winfo_width()-self.yscrollbar4.winfo_width()-5)
+        self.canvas.bind("<Configure>", self.on_canvas_resize)
+        self.control_frame4.update_idletasks()
+        self.canvas.config(scrollregion=self.canvas.bbox("all"))
+
         
         self.add_new_variable_button = ttk.Button(self.control_frame1, text="Add Variable", command=self.add_new_variable)
         self.add_new_variable_button.pack(side=tk.TOP, fill=tk.X)
@@ -522,14 +533,19 @@ class Calculator(tk.Toplevel):
         self.calculate_button = ttk.Button(self.control_frame3, text="Calculate", command=self.calculate)
         self.calculate_button.pack(side=tk.TOP, fill=tk.X)
         
+    def on_canvas_resize(self, event):
+        self.canvas.itemconfig(self.control_frame4_id, width=event.width-self.yscrollbar4.winfo_width()-5)
+        self.canvas.config(scrollregion=self.canvas.bbox("all"))
     
     def add_new_variable(self):
         available_image = [window.title() for window in self.parent.display_windows]
         
-        select_variable_label = ttk.Label(self.control_frame4, text=f"Variable ${self.n_variables}")
+        control_frame = ttk.Frame(self.control_frame4)
+        control_frame.pack(side=tk.TOP, fill=tk.X)
+        select_variable_label = ttk.Label(control_frame, text=f"Variable ${self.n_variables}")
         select_variable_label.pack(side=tk.LEFT)
 
-        select_variable = ttk.Combobox(self.control_frame4, values=available_image)
+        select_variable = ttk.Combobox(control_frame, values=available_image)
         select_variable.pack(side=tk.LEFT, fill=tk.X, expand=True)
         select_variable.bind("<ButtonPress-1>", self.update_selections)
         select_variable.bind("<<ComboboxSelected>>", self.update_variable_name)
@@ -537,6 +553,9 @@ class Calculator(tk.Toplevel):
         self.variables[f'${self.n_variables}'] = {}
         self.variables[f'${self.n_variables}']['entry'] = select_variable
         self.n_variables += 1
+        
+        self.control_frame4.update_idletasks()
+        self.canvas.config(scrollregion=self.canvas.bbox("all"))
         
     def update_selections(self, event):
         available_image = [window.title() for window in self.parent.display_windows]
