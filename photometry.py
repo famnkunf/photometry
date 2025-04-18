@@ -908,7 +908,7 @@ class Aperture(tk.Toplevel):
         self.destroy()
         
     def get_max(self, aperture: patches.Ellipse, image):
-        rr, cc = skimage.draw.ellipse(aperture.center[0], aperture.center[1], aperture.width/2, aperture.height/2, shape=image.shape, rotation=np.deg2rad(aperture.angle))
+        rr, cc = skimage.draw.ellipse(aperture.center[0], aperture.center[1], aperture.width/2, aperture.height/2, shape=(image.shape[1], image.shape[0]), rotation=np.deg2rad(aperture.angle))
         if rr.shape[0] == 0 or cc.shape[0] == 0:
             return (aperture.center[0], aperture.center[1])
         rr_min = np.min(rr)
@@ -984,9 +984,9 @@ class ObjectsWindow(tk.Toplevel):
             self.current_selection = None
         
     def get_intensity(self, inner_aperture, gap_aperture, outer_aperture, image):
-        inner_rr, inner_cc = skimage.draw.ellipse(inner_aperture.center[0], inner_aperture.center[1], inner_aperture.width/2, inner_aperture.height/2, shape=image.shape, rotation=np.deg2rad(inner_aperture.angle))
-        gap_rr, gap_cc = skimage.draw.ellipse(gap_aperture.center[0], gap_aperture.center[1], gap_aperture.width/2, gap_aperture.height/2, shape=image.shape, rotation=np.deg2rad(gap_aperture.angle))
-        outer_rr, outer_cc = skimage.draw.ellipse(outer_aperture.center[0], outer_aperture.center[1], outer_aperture.width/2, outer_aperture.height/2, shape=image.shape, rotation=np.deg2rad(outer_aperture.angle))
+        inner_rr, inner_cc = skimage.draw.ellipse(inner_aperture.center[0], inner_aperture.center[1], inner_aperture.width/2, inner_aperture.height/2, shape=(image.shape[1], image.shape[0]), rotation=np.deg2rad(inner_aperture.angle))
+        gap_rr, gap_cc = skimage.draw.ellipse(gap_aperture.center[0], gap_aperture.center[1], gap_aperture.width/2, gap_aperture.height/2, shape=(image.shape[1], image.shape[0]), rotation=np.deg2rad(gap_aperture.angle))
+        outer_rr, outer_cc = skimage.draw.ellipse(outer_aperture.center[0], outer_aperture.center[1], outer_aperture.width/2, outer_aperture.height/2, shape=(image.shape[1], image.shape[0]), rotation=np.deg2rad(outer_aperture.angle))
         inner_mask = np.zeros(image.shape, dtype=bool)
         inner_mask[inner_cc, inner_rr] = True
         gap_mask = np.zeros(image.shape, dtype=bool)
