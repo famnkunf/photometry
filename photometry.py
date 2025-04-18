@@ -936,22 +936,29 @@ class ObjectsWindow(tk.Toplevel):
         self.control_frame1 = ttk.Frame(self)
         self.control_frame1.pack(side=tk.TOP, fill=tk.X)
         
-        self.object_table = ttk.Treeview(self.control_frame1, columns=("Index", "X", "Y", "Intensity"), show="headings")
+        self.object_table = ttk.Treeview(self.control_frame1, columns=("Index", "Name", "X", "Y", "Intensity"), show="headings")
         for i in self.object_table["columns"]:
             self.object_table.heading(i, text=i)
             self.object_table.column(i, width=50)
         self.object_table.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
-        self.object_table.bind("<Double-1>", self.on_double_click)
+        self.object_table.bind("<ButtonRelease-1>", self.on_left_click)
         self.object_table.bind("<Button-3>", self.on_right_click)
+        self.object_table.bind("<Double-1>", self.on_double_click)
         self.object_table.bind("<Delete>", self.delete)
         self.update_table()
+        
+        self.control_frame2 = ttk.Frame(self)
+        self.control_frame2.pack(side=tk.BOTTOM, fill=tk.X)
+        
+        self.save_button = ttk.Button(self.control_frame2, text="Save", command=self.save)
+        self.save_button.pack(side=tk.LEFT, fill=tk.X, expand=True)
         
     def update_table(self):
         self.object_table.delete(*self.object_table.get_children())
         for aperture in self.added_apertures:
             x, y = aperture[0].center
             intensity = self.get_intensity(aperture[0], aperture[1], aperture[2], self.parent.image)
-            self.object_table.insert("", "end", values=((len(self.object_table.get_children())+1), x, y, intensity))
+            self.object_table.insert("", "end", values=((len(self.object_table.get_children())+1), "", x, y, intensity))
         
     def delete(self, event: tk.Event):
         if len(self.object_table.selection()) > 0:
@@ -966,8 +973,21 @@ class ObjectsWindow(tk.Toplevel):
                 self.object_table.delete(item)
                       
     def on_double_click(self, event):
+        col_n = self.object_table.identify_column(event.x)
+        if col_n == "#2":
+            # Edit name
+            selected_item = self.object_table.selection()[0]
+            name = self.object_table.item(selected_item, "values")[1]
+            name = tk.simpledialog.askstring("Edit Name", "Enter new name:", initialvalue=name)
+            if name:
+                self.object_table.set(selected_item, column=1, value=name)
+            
+                      
+    def on_left_click(self, event):
+        while len(self.object_table.selection()) == 0:
+            pass
         selected_item = self.object_table.selection()[0]
-        index, x, y, intensity = self.object_table.item(selected_item, "values")
+        index, name, x, y, intensity = self.object_table.item(selected_item, "values")
         x = int(x)
         y = int(y)
         intensity = float(intensity)
@@ -1001,6 +1021,19 @@ class ObjectsWindow(tk.Toplevel):
     def close(self):
         self.parent.objects_window = None
         self.destroy()
+    
+    def save(self):
+        df = pd.DataFrame(columns=["Name", "X", "Y", "Intensity"])
+        for item in self.object_table.get_children():
+            index, name, x, y, intensity = self.object_table.item(item, "values")
+            x = int(x)
+            y = int(y)
+            intensity = float(intensity)
+            df.loc[len(df)] = [name, x, y, intensity]
+        file_path = filedialog.asksaveasfilename(defaultextension=".csv", filetypes=[("CSV files", "*.csv")])
+        if file_path:
+            df.to_csv(file_path, index=False)
+            messagebox.showinfo("Saved", f"Data saved to {file_path}")
     
 if __name__ == "__main__":
     # mpl.rcParams['path.simplify'] = True
