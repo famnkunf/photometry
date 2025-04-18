@@ -604,7 +604,7 @@ class Calculator(tk.Toplevel):
         for key in replace_dict.keys():
             if key in formular:
                 formular = formular.replace(key, replace_dict[key])
-        output = re.compile(r'!#(.*)$')
+        output = re.compile(r'!#(.*)$', re.MULTILINE)
         var = re.compile(r'\$\((\w+)\)')
         formular = var.sub(self.format_var, formular)
         formular = output.sub(self.format, formular)    
