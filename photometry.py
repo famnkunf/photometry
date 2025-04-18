@@ -936,7 +936,7 @@ class ObjectsWindow(tk.Toplevel):
         self.control_frame1 = ttk.Frame(self)
         self.control_frame1.pack(side=tk.TOP, fill=tk.X)
         
-        self.object_table = ttk.Treeview(self.control_frame1, columns=("Index", "Name", "X", "Y", "Intensity"), show="headings")
+        self.object_table = ttk.Treeview(self.control_frame1, columns=("Index", "Name", "X", "Y", "Intensity", "Note"), show="headings")
         for i in self.object_table["columns"]:
             self.object_table.heading(i, text=i)
             self.object_table.column(i, width=50)
@@ -958,7 +958,7 @@ class ObjectsWindow(tk.Toplevel):
         for aperture in self.added_apertures:
             x, y = aperture[0].center
             intensity = self.get_intensity(aperture[0], aperture[1], aperture[2], self.parent.image)
-            self.object_table.insert("", "end", values=((len(self.object_table.get_children())+1), "", x, y, intensity))
+            self.object_table.insert("", "end", values=((len(self.object_table.get_children())+1), "", x, y, intensity, ""))
         
     def delete(self, event: tk.Event):
         if len(self.object_table.selection()) > 0:
@@ -975,19 +975,23 @@ class ObjectsWindow(tk.Toplevel):
     def on_double_click(self, event):
         col_n = self.object_table.identify_column(event.x)
         if col_n == "#2":
-            # Edit name
             selected_item = self.object_table.selection()[0]
             name = self.object_table.item(selected_item, "values")[1]
             name = tk.simpledialog.askstring("Edit Name", "Enter new name:", initialvalue=name)
             if name:
                 self.object_table.set(selected_item, column=1, value=name)
-            
+        elif col_n == "#6":
+            selected_item = self.object_table.selection()[0]
+            note = self.object_table.item(selected_item, "values")[5]
+            note = tk.simpledialog.askstring("Edit Note", "Enter new note:", initialvalue=note)
+            if note:
+                self.object_table.set(selected_item, column=5, value=note)
                       
     def on_left_click(self, event):
         while len(self.object_table.selection()) == 0:
             pass
         selected_item = self.object_table.selection()[0]
-        index, name, x, y, intensity = self.object_table.item(selected_item, "values")
+        index, name, x, y, intensity, note = self.object_table.item(selected_item, "values")
         x = int(x)
         y = int(y)
         intensity = float(intensity)
@@ -1023,13 +1027,13 @@ class ObjectsWindow(tk.Toplevel):
         self.destroy()
     
     def save(self):
-        df = pd.DataFrame(columns=["Name", "X", "Y", "Intensity"])
+        df = pd.DataFrame(columns=["Name", "X", "Y", "Intensity", "Note"])
         for item in self.object_table.get_children():
-            index, name, x, y, intensity = self.object_table.item(item, "values")
+            index, name, x, y, intensity, note = self.object_table.item(item, "values")
             x = int(x)
             y = int(y)
             intensity = float(intensity)
-            df.loc[len(df)] = [name, x, y, intensity]
+            df.loc[len(df)] = [name, x, y, intensity, note]
         file_path = filedialog.asksaveasfilename(defaultextension=".csv", filetypes=[("CSV files", "*.csv")])
         if file_path:
             df.to_csv(file_path, index=False)
