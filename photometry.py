@@ -108,6 +108,7 @@ class DisplayWindow(tk.Toplevel):
         self.header = header
         self.parent = parent
         self.header_window = None
+        self.objects_window = None
         self.norm = ImageNormalize(self.image, stretch=LinearStretch())
         self.pan_start = None
         self.adding_aperture = False
@@ -145,6 +146,9 @@ class DisplayWindow(tk.Toplevel):
         self.add_aperture_button = ttk.Button(self.control_frame1, text="Add Aperture", command=self.add_aperture)
         self.add_aperture_button.pack(side=tk.LEFT)
         
+        self.objects_button = ttk.Button(self.control_frame1, text="Objects", command=self.show_table)
+        self.objects_button.pack(side=tk.LEFT)
+        
         self.positionX_label = ttk.Label(self.control_frame2, text="X:")
         self.positionX_label.pack(side=tk.LEFT)
         self.positionY_label = ttk.Label(self.control_frame2, text="Y:")
@@ -165,6 +169,13 @@ class DisplayWindow(tk.Toplevel):
         else:
             messagebox.showerror("Error", "No header information available.")
         # self.header_window.mainloop()
+
+    def show_table(self):
+        if self.objects_window is None:
+            self.objects_window = ObjectsWindow(self, self.added_apertures)
+            self.objects_window.protocol("WM_DELETE_WINDOW", self.objects_window.close)
+        else:
+            self.objects_window.focus()
 
     def display_image(self):
         self.ax.imshow(self.image, cmap='gray', norm=self.norm)
@@ -292,6 +303,8 @@ class DisplayWindow(tk.Toplevel):
                     self.aperture_window.close()
                     self.add_aperture_button.state(['!pressed'])
                     self.adding_aperture = False
+                    if self.objects_window:
+                        self.objects_window.update_table()
                     self.canvas.draw_idle()
             else:
                 if not self.drawing_type:
@@ -851,11 +864,13 @@ class Aperture(tk.Toplevel):
             [i.remove() for i in self.parent.aperture]
             self.parent.aperture = ()
             self.parent.canvas.draw_idle()
-            self.parent.add_aperture_button.config(relief="raised")
+            self.parent.add_aperture_button.state(['!pressed'])
         self.destroy()
         
     def get_max(self, aperture: patches.Ellipse, image):
-        rr, cc = skimage.draw.ellipse(aperture.center[0], aperture.center[1], aperture.width/2, aperture.height/2, shape=image.shape, rotation=aperture.angle)
+        rr, cc = skimage.draw.ellipse(aperture.center[0], aperture.center[1], aperture.width/2, aperture.height/2, shape=image.shape, rotation=np.deg2rad(aperture.angle))
+        if rr.shape[0] == 0 or cc.shape[0] == 0:
+            return (aperture.center[0], aperture.center[1])
         rr_min = np.min(rr)
         rr_max = np.max(rr)
         cc_min = np.min(cc)
@@ -863,6 +878,91 @@ class Aperture(tk.Toplevel):
         image = image[cc_min:cc_max, rr_min:rr_max]
         coords = np.unravel_index(np.argmax(image, axis=None), image.shape)
         return (coords[1] + rr_min, coords[0] + cc_min)
+    
+class ObjectsWindow(tk.Toplevel):
+    def __init__(self, parent: DisplayWindow=None, added_apertures=None):
+        super().__init__()
+        self.parent = parent
+        self.title(self.parent.title())
+        self.geometry("400x300")
+        self.attributes("-topmost", True)
+        self.added_apertures = added_apertures
+        self.parent.objects_window = self
+        self.current_selection = None
+        
+        self.create_widget()
+        
+    def create_widget(self):
+        self.control_frame1 = ttk.Frame(self)
+        self.control_frame1.pack(side=tk.TOP, fill=tk.X)
+        
+        self.object_table = ttk.Treeview(self.control_frame1, columns=("Index", "X", "Y", "Intensity"), show="headings")
+        for i in self.object_table["columns"]:
+            self.object_table.heading(i, text=i)
+            self.object_table.column(i, width=50)
+        self.object_table.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+        self.object_table.bind("<Double-1>", self.on_double_click)
+        self.object_table.bind("<Button-3>", self.on_right_click)
+        self.object_table.bind("<Delete>", self.delete)
+        self.update_table()
+        
+    def update_table(self):
+        self.object_table.delete(*self.object_table.get_children())
+        for aperture in self.added_apertures:
+            x, y = aperture[0].center
+            intensity = self.get_intensity(aperture[0], aperture[1], aperture[2], self.parent.image)
+            self.object_table.insert("", "end", values=((len(self.object_table.get_children())+1), x, y, intensity))
+        
+    def delete(self, event: tk.Event):
+        if len(self.object_table.selection()) > 0:
+            index = int(self.object_table.item(self.object_table.selection()[0], "values")[0])-1
+            for i in self.added_apertures[index]:
+                i.remove()
+            self.parent.added_apertures.pop(index)
+            self.parent.canvas.draw_idle()
+            for i, c in enumerate(self.object_table.get_children()):
+                self.object_table.set(c, column=0, value=i)
+            for item in self.object_table.selection():
+                self.object_table.delete(item)
+                      
+    def on_double_click(self, event):
+        selected_item = self.object_table.selection()[0]
+        index, x, y, intensity = self.object_table.item(selected_item, "values")
+        x = int(x)
+        y = int(y)
+        intensity = float(intensity)
+        if self.current_selection is not None:
+            self.current_selection[0].remove()
+        self.current_selection = self.parent.ax.plot(x, y, 'ro')
+        self.parent.ax.set_aspect('equal')
+        self.parent.canvas.draw_idle()
+        
+    def on_right_click(self, event):
+        if self.current_selection is not None:
+            self.current_selection[0].remove()
+            self.parent.canvas.draw_idle()
+            self.current_selection = None
+        
+    def get_intensity(self, inner_aperture, gap_aperture, outer_aperture, image):
+        inner_rr, inner_cc = skimage.draw.ellipse(inner_aperture.center[0], inner_aperture.center[1], inner_aperture.width/2, inner_aperture.height/2, shape=image.shape, rotation=np.deg2rad(inner_aperture.angle))
+        gap_rr, gap_cc = skimage.draw.ellipse(gap_aperture.center[0], gap_aperture.center[1], gap_aperture.width/2, gap_aperture.height/2, shape=image.shape, rotation=np.deg2rad(gap_aperture.angle))
+        outer_rr, outer_cc = skimage.draw.ellipse(outer_aperture.center[0], outer_aperture.center[1], outer_aperture.width/2, outer_aperture.height/2, shape=image.shape, rotation=np.deg2rad(outer_aperture.angle))
+        inner_mask = np.zeros(image.shape, dtype=bool)
+        inner_mask[inner_cc, inner_rr] = True
+        gap_mask = np.zeros(image.shape, dtype=bool)
+        gap_mask[gap_cc, gap_rr] = True
+        outer_mask = np.zeros(image.shape, dtype=bool)
+        outer_mask[outer_cc, outer_rr] = True
+        background_mask = outer_mask & ~inner_mask & ~gap_mask
+        background = np.mean(image[background_mask])
+        intensity = np.sum(image[inner_mask])
+        return intensity - background
+        
+        
+    
+    def close(self):
+        self.parent.objects_window = None
+        self.destroy()
     
 if __name__ == "__main__":
     # mpl.rcParams['path.simplify'] = True
