@@ -197,6 +197,21 @@ class DisplayWindow(tk.Toplevel):
             self.add_aperture_button.state(['!pressed'])
             self.aperture_window.close()
         
+    def draw_aperture(self, x, y):
+        a = float(self.aperture_window.aperture_major.get())
+        b = float(self.aperture_window.aperture_minor.get())
+        gap = float(self.aperture_window.gap.get())
+        angle = float(self.aperture_window.aperture_angle.get())
+        background = float(self.aperture_window.background.get())
+        p = patches.Ellipse((x, y), a, b, angle=angle, color='red', fill=False, lw=1)
+        g = patches.Ellipse((x, y), a+gap, b+gap, angle=angle, color='red', fill=False, lw=1, linestyle='dashed')
+        bg = patches.Ellipse((x, y), a+gap+background, b+gap+background, angle=angle, color='blue', fill=False, lw=1, linestyle='dashed')
+        if len(self.aperture) > 0:
+            [i.remove() for i in self.aperture]
+        self.aperture = (p, g, bg)
+        [self.ax.add_patch(i) for i in self.aperture]
+        self.canvas.draw_idle()     
+        
     def on_mouse_move(self, event):
         if event.xdata is not None and event.ydata is not None:
             x, y = int(event.xdata), int(event.ydata)
@@ -209,19 +224,7 @@ class DisplayWindow(tk.Toplevel):
             self.positionX_label.config(text=f"X: {x}")
             self.positionY_label.config(text=f"Y: {y}")
             if self.adding_aperture:
-                a = float(self.aperture_window.aperture_major.get())
-                b = float(self.aperture_window.aperture_minor.get())
-                gap = float(self.aperture_window.gap.get())
-                angle = float(self.aperture_window.aperture_angle.get())
-                background = float(self.aperture_window.background.get())
-                p = patches.Ellipse((x, y), a, b, angle=angle, color='red', fill=False, lw=1)
-                g = patches.Ellipse((x, y), a+gap, b+gap, angle=angle, color='red', fill=False, lw=1, linestyle='dashed')
-                bg = patches.Ellipse((x, y), a+gap+background, b+gap+background, angle=angle, color='blue', fill=False, lw=1, linestyle='dashed')
-                if len(self.aperture) > 0:
-                    [i.remove() for i in self.aperture]
-                self.aperture = (p, g, bg)
-                [self.ax.add_patch(i) for i in self.aperture]
-                self.canvas.draw_idle()              
+                self.draw_aperture(x, y)             
             else:
                 if self.drawing_type == "Line":
                     if self.coords1 is not None and self.coords2 is None:
@@ -595,19 +598,24 @@ class Calculator(tk.Toplevel):
             "#acos(": "np.arccos(",
             "#atan(": "np.arctan(",
         }
-        for key in self.variables.keys():
-            if key in formular:
-                formular = formular.replace(key, f"self.variables['{key}']['display'].image")
+        # for key in self.variables.keys():
+        #     if key in formular:
+        #         formular = formular.replace(key, f"self.variables['{key}']['display'].image")
         for key in replace_dict.keys():
             if key in formular:
                 formular = formular.replace(key, replace_dict[key])
         output = re.compile(r'!#(.*)$')
+        var = re.compile(r'\$\((\w+)\)')
+        formular = var.sub(self.format_var, formular)
         formular = output.sub(self.format, formular)    
         try:
             result = exec(formular)
         except Exception as e:
             messagebox.showerror("Error", f"Calculation failed: {e, formular}")
             return
+
+    def format_var(self, match):
+        return "eval(\"self.variables[('$' + str({w}))]['display'].image\")".format(w=match.group(1))
 
     def format(self, match):
         return f"self.output({match.group(1)})"
@@ -832,30 +840,62 @@ class Aperture(tk.Toplevel):
         self.aperture_major = ttk.Entry(self.control_frame1)
         self.aperture_major.pack(side=tk.TOP, fill=tk.X)
         self.aperture_major.insert(0, "20")
+        self.aperture_major.bind("<Up>", self.increase)
+        self.aperture_major.bind("<Down>", self.decrease)
 
         self.aperture_minor_label = ttk.Label(self.control_frame2, text="Aperture Minor axis:")        
         self.aperture_minor_label.pack(side=tk.TOP, fill=tk.X)
         self.aperture_minor = ttk.Entry(self.control_frame2)
         self.aperture_minor.pack(side=tk.TOP, fill=tk.X)
         self.aperture_minor.insert(0, "20")
+        self.aperture_minor.bind("<Up>", self.increase)
+        self.aperture_minor.bind("<Down>", self.decrease)
         
         self.aperture_angle_label = ttk.Label(self.control_frame3, text="Aperture Angle:")
         self.aperture_angle_label.pack(side=tk.TOP, fill=tk.X)
         self.aperture_angle = ttk.Entry(self.control_frame3)
         self.aperture_angle.pack(side=tk.TOP, fill=tk.X)        
         self.aperture_angle.insert(0, "0")
+        self.aperture_angle.bind("<Up>", self.increase)
+        self.aperture_angle.bind("<Down>", self.decrease)
         
         self.gap_label = ttk.Label(self.control_frame4, text="Gap:")
         self.gap_label.pack(side=tk.TOP, fill=tk.X)
         self.gap = ttk.Entry(self.control_frame4)
         self.gap.pack(side=tk.TOP, fill=tk.X)
         self.gap.insert(0, "10")
+        self.gap.bind("<Up>", self.increase)
+        self.gap.bind("<Down>", self.decrease)
         
         self.background_label = ttk.Label(self.control_frame5, text="Background:")
         self.background_label.pack(side=tk.TOP, fill=tk.X)
         self.background = ttk.Entry(self.control_frame5)
         self.background.pack(side=tk.TOP, fill=tk.X)
         self.background.insert(0, "10")
+        self.background.bind("<Up>", self.increase)
+        self.background.bind("<Down>", self.decrease)
+        
+    def increase(self, event):
+        old = event.widget.get()
+        if old == "":
+            old = 0
+        else:
+            old = int(old)
+        event.widget.delete(0, tk.END)
+        event.widget.insert(0, str(old+1))
+        x, y = self.parent.aperture[0].get_center()
+        self.parent.draw_aperture(x, y)
+    
+    def decrease(self, event):
+        old = event.widget.get()
+        if old == "":
+            old = 0
+        else:
+            old = int(old)
+        event.widget.delete(0, tk.END)
+        event.widget.insert(0, str(old-1))
+        x, y = self.parent.aperture[0].get_center()
+        self.parent.draw_aperture(x, y)
         
     def close(self):
         self.parent.aperture_window = None
@@ -957,8 +997,6 @@ class ObjectsWindow(tk.Toplevel):
         background = np.mean(image[background_mask])
         intensity = np.sum(image[inner_mask])
         return intensity - background
-        
-        
     
     def close(self):
         self.parent.objects_window = None
