@@ -2,7 +2,7 @@ import tkinter as tk
 from tkinter import ttk
 from tkinter import filedialog, messagebox
 from astropy.io import fits
-from astropy.visualization import ImageNormalize, LinearStretch
+from astropy.visualization import ImageNormalize, LogStretch
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
@@ -109,12 +109,13 @@ class DisplayWindow(tk.Toplevel):
         self.parent = parent
         self.header_window = None
         self.objects_window = None
-        self.norm = ImageNormalize(self.image, stretch=LinearStretch())
+        self.norm = ImageNormalize(self.image, stretch=LogStretch())
         self.pan_start = None
         self.adding_aperture = False
         self.aperture_window = None
         self.added_apertures = []
         self.aperture = ()
+        self.aperture_prev_params = ()
         
         self.create_widget()
 
@@ -191,7 +192,10 @@ class DisplayWindow(tk.Toplevel):
         self.adding_aperture = not self.adding_aperture
         if self.add_aperture:
             self.add_aperture_button.state(['pressed'])
-            self.aperture_window = Aperture(self)
+            if len(self.aperture_prev_params) > 0:
+                self.aperture_window = Aperture(self, *self.aperture_prev_params)
+            else:
+                self.aperture_window = Aperture(self)
             self.aperture_window.protocol("WM_DELETE_WINDOW", self.aperture_window.close)
         else:
             self.add_aperture_button.state(['!pressed'])
@@ -203,6 +207,7 @@ class DisplayWindow(tk.Toplevel):
         gap = float(self.aperture_window.gap.get())
         angle = float(self.aperture_window.aperture_angle.get())
         background = float(self.aperture_window.background.get())
+        self.aperture_prev_params = (a, b, gap, angle, background)
         p = patches.Ellipse((x, y), a, b, angle=angle, color='red', fill=False, lw=1)
         g = patches.Ellipse((x, y), a+gap, b+gap, angle=angle, color='red', fill=False, lw=1, linestyle='dashed')
         bg = patches.Ellipse((x, y), a+gap+background, b+gap+background, angle=angle, color='blue', fill=False, lw=1, linestyle='dashed')
@@ -784,9 +789,9 @@ class Histogram(tk.Toplevel):
         self.selected_window.canvas.draw_idle()
     
     def compute(self):
-        self.data = self.selected_window.image.flatten()
-        self.sigma = np.std(self.selected_window.image.flatten())
-        self.mean = np.mean(self.selected_window.image.flatten())
+        self.data = np.nan_to_num(self.selected_window.image.flatten(), -99999)
+        self.sigma = np.std(self.data)
+        self.mean = np.mean(self.data)
         self.min_value = self.mean - self.sigma
         self.vmin.set(self.min_value)
         self.max_value = self.mean + self.sigma
@@ -813,7 +818,7 @@ class Histogram(tk.Toplevel):
         self.destroy()
         
 class Aperture(tk.Toplevel):
-    def __init__(self, parent: DisplayWindow=None):
+    def __init__(self, parent: DisplayWindow=None, a=20, b=20, angle=0, gap=10, background=10):
         super().__init__()
         self.parent = parent
         self.title(self.parent.title())
@@ -821,9 +826,9 @@ class Aperture(tk.Toplevel):
         self.geometry("400x300")
         self.attributes("-topmost", True)
         
-        self.create_widget()
+        self.create_widget(a, b, angle, gap, background)
         
-    def create_widget(self):
+    def create_widget(self, a, b, angle, gap, background):
         self.control_frame1 = ttk.Frame(self)
         self.control_frame1.pack(side=tk.TOP, fill=tk.X)
         self.control_frame2 = ttk.Frame(self)
@@ -839,7 +844,7 @@ class Aperture(tk.Toplevel):
         self.aperture_major_label.pack(side=tk.TOP, fill=tk.X)
         self.aperture_major = ttk.Entry(self.control_frame1)
         self.aperture_major.pack(side=tk.TOP, fill=tk.X)
-        self.aperture_major.insert(0, "20")
+        self.aperture_major.insert(0, str(a))
         self.aperture_major.bind("<Up>", self.increase)
         self.aperture_major.bind("<Down>", self.decrease)
 
@@ -847,7 +852,7 @@ class Aperture(tk.Toplevel):
         self.aperture_minor_label.pack(side=tk.TOP, fill=tk.X)
         self.aperture_minor = ttk.Entry(self.control_frame2)
         self.aperture_minor.pack(side=tk.TOP, fill=tk.X)
-        self.aperture_minor.insert(0, "20")
+        self.aperture_minor.insert(0, str(b))
         self.aperture_minor.bind("<Up>", self.increase)
         self.aperture_minor.bind("<Down>", self.decrease)
         
@@ -855,7 +860,7 @@ class Aperture(tk.Toplevel):
         self.aperture_angle_label.pack(side=tk.TOP, fill=tk.X)
         self.aperture_angle = ttk.Entry(self.control_frame3)
         self.aperture_angle.pack(side=tk.TOP, fill=tk.X)        
-        self.aperture_angle.insert(0, "0")
+        self.aperture_angle.insert(0, str(angle))
         self.aperture_angle.bind("<Up>", self.increase)
         self.aperture_angle.bind("<Down>", self.decrease)
         
@@ -863,7 +868,7 @@ class Aperture(tk.Toplevel):
         self.gap_label.pack(side=tk.TOP, fill=tk.X)
         self.gap = ttk.Entry(self.control_frame4)
         self.gap.pack(side=tk.TOP, fill=tk.X)
-        self.gap.insert(0, "10")
+        self.gap.insert(0, str(gap))
         self.gap.bind("<Up>", self.increase)
         self.gap.bind("<Down>", self.decrease)
         
@@ -871,7 +876,7 @@ class Aperture(tk.Toplevel):
         self.background_label.pack(side=tk.TOP, fill=tk.X)
         self.background = ttk.Entry(self.control_frame5)
         self.background.pack(side=tk.TOP, fill=tk.X)
-        self.background.insert(0, "10")
+        self.background.insert(0, str(background))
         self.background.bind("<Up>", self.increase)
         self.background.bind("<Down>", self.decrease)
         
@@ -880,7 +885,7 @@ class Aperture(tk.Toplevel):
         if old == "":
             old = 0
         else:
-            old = int(old)
+            old = float(old)
         event.widget.delete(0, tk.END)
         event.widget.insert(0, str(old+1))
         x, y = self.parent.aperture[0].get_center()
@@ -966,6 +971,9 @@ class ObjectsWindow(tk.Toplevel):
             for i in self.added_apertures[index]:
                 i.remove()
             self.parent.added_apertures.pop(index)
+            if self.current_selection is not None:  
+                self.current_selection[0].remove()
+                self.current_selection = None
             self.parent.canvas.draw_idle()
             for i, c in enumerate(self.object_table.get_children()):
                 self.object_table.set(c, column=0, value=i)
