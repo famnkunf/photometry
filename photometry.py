@@ -897,7 +897,7 @@ class Aperture(tk.Toplevel):
         if old == "":
             old = 0
         else:
-            old = int(old)
+            old = float(old)
         event.widget.delete(0, tk.END)
         event.widget.insert(0, str(old-1))
         x, y = self.parent.aperture[0].get_center()
