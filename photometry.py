@@ -2,7 +2,7 @@ import tkinter as tk
 from tkinter import ttk
 from tkinter import filedialog, messagebox
 from astropy.io import fits
-from astropy.visualization import ImageNormalize, LogStretch
+from astropy.visualization import ImageNormalize, LinearStretch
 import matplotlib as mpl
 mpl.use("TkAgg")
 import matplotlib.pyplot as plt
@@ -110,7 +110,7 @@ class DisplayWindow(tk.Toplevel):
         self.parent = parent
         self.header_window = None
         self.objects_window = None
-        self.norm = ImageNormalize(self.image, stretch=LogStretch())
+        self.norm = ImageNormalize(self.image, stretch=LinearStretch())
         self.pan_start = None
         self.adding_aperture = False
         self.aperture_window = None
@@ -827,6 +827,7 @@ class Aperture(tk.Toplevel):
         self.geometry("400x300")
         self.attributes("-topmost", True)
         
+        self.enable_circle_aperture = tk.BooleanVar()
         self.create_widget(a, b, angle, gap, background)
         
     def create_widget(self, a, b, angle, gap, background):
@@ -840,22 +841,25 @@ class Aperture(tk.Toplevel):
         self.control_frame4.pack(side=tk.TOP, fill=tk.X)
         self.control_frame5 = ttk.Frame(self)
         self.control_frame5.pack(side=tk.TOP, fill=tk.X)
+        self.control_frame6 = ttk.Frame(self)
+        self.control_frame6.pack(side=tk.TOP, fill=tk.X)
+        
         
         self.aperture_major_label = ttk.Label(self.control_frame1, text="Aperture Major axis:")
         self.aperture_major_label.pack(side=tk.TOP, fill=tk.X)
         self.aperture_major = ttk.Entry(self.control_frame1)
         self.aperture_major.pack(side=tk.TOP, fill=tk.X)
         self.aperture_major.insert(0, str(a))
-        self.aperture_major.bind("<Up>", self.increase)
-        self.aperture_major.bind("<Down>", self.decrease)
+        self.aperture_major.bind("<Up>", self.increase_axis)
+        self.aperture_major.bind("<Down>", self.decrease_axis)
 
         self.aperture_minor_label = ttk.Label(self.control_frame2, text="Aperture Minor axis:")        
         self.aperture_minor_label.pack(side=tk.TOP, fill=tk.X)
         self.aperture_minor = ttk.Entry(self.control_frame2)
         self.aperture_minor.pack(side=tk.TOP, fill=tk.X)
         self.aperture_minor.insert(0, str(b))
-        self.aperture_minor.bind("<Up>", self.increase)
-        self.aperture_minor.bind("<Down>", self.decrease)
+        self.aperture_minor.bind("<Up>", self.increase_axis)
+        self.aperture_minor.bind("<Down>", self.decrease_axis)
         
         self.aperture_angle_label = ttk.Label(self.control_frame3, text="Aperture Angle:")
         self.aperture_angle_label.pack(side=tk.TOP, fill=tk.X)
@@ -881,6 +885,58 @@ class Aperture(tk.Toplevel):
         self.background.bind("<Up>", self.increase)
         self.background.bind("<Down>", self.decrease)
         
+        self.enable_circle_aperture_checkbox = ttk.Checkbutton(self.control_frame6, text="Enable Circle Aperture?", variable=self.enable_circle_aperture)
+        self.enable_circle_aperture.set(True)
+        self.enable_circle_aperture_checkbox.pack(side=tk.RIGHT)
+
+    def increase_axis(self, event):
+        if self.enable_circle_aperture.get():
+            old = event.widget.get()
+            if old == "":
+                old = 0
+            else:
+                old = float(old)
+            self.aperture_major.delete(0, tk.END)
+            self.aperture_major.insert(0, str(old+1))
+            self.aperture_minor.delete(0, tk.END)
+            self.aperture_minor.insert(0, str(old+1))
+            x, y = self.parent.aperture[0].get_center()
+            self.parent.draw_aperture(x, y)
+        else:
+            old = event.widget.get()
+            if old == "":
+                old = 0
+            else:
+                old = float(old)
+            event.widget.delete(0, tk.END)
+            event.widget.insert(0, str(old+1))
+            x, y = self.parent.aperture[0].get_center()
+            self.parent.draw_aperture(x, y)
+            
+    def decrease_axis(self, event):
+        if self.enable_circle_aperture.get():
+            old = event.widget.get()
+            if old == "":
+                old = 0
+            else:
+                old = float(old)
+            self.aperture_major.delete(0, tk.END)
+            self.aperture_major.insert(0, str(old-1))
+            self.aperture_minor.delete(0, tk.END)
+            self.aperture_minor.insert(0, str(old-1))
+            x, y = self.parent.aperture[0].get_center()
+            self.parent.draw_aperture(x, y)
+        else:
+            old = event.widget.get()
+            if old == "":
+                old = 0
+            else:
+                old = float(old)
+            event.widget.delete(0, tk.END)
+            event.widget.insert(0, str(old-1))
+            x, y = self.parent.aperture[0].get_center()
+            self.parent.draw_aperture(x, y)
+
     def increase(self, event):
         old = event.widget.get()
         if old == "":
@@ -1028,8 +1084,8 @@ class ObjectsWindow(tk.Toplevel):
         outer_mask[outer_cc, outer_rr] = True
         background_mask = outer_mask & ~inner_mask & ~gap_mask
         background = np.mean(image[background_mask])
-        intensity = np.sum(image[inner_mask])
-        return intensity - background
+        intensity = np.sum(image[inner_mask]-background)
+        return intensity
     
     def close(self):
         self.parent.objects_window = None
