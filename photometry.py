@@ -1064,8 +1064,8 @@ class ObjectsWindow(tk.Toplevel):
                 self.object_table.set(selected_item, column=5, value=note)
                       
     def on_left_click(self, event):
-        while len(self.object_table.selection()) == 0:
-            pass
+        if len(self.object_table.selection()) == 0:
+            return
         selected_item = self.object_table.selection()[0]
         index, name, x, y, intensity, note = self.object_table.item(selected_item, "values")
         x = int(x)
