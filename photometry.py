@@ -3,8 +3,9 @@ from tkinter import ttk
 from tkinter import filedialog, messagebox
 from astropy.io import fits
 from astropy.visualization import ImageNormalize, LogStretch
-import matplotlib.pyplot as plt
 import matplotlib as mpl
+mpl.use("TkAgg")
+import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib import patches
 # from photutils.aperture import CircularAperture, CircularAnnulus, aperture_photometry
