@@ -28,6 +28,7 @@ class TopWindow(tk.Tk):
         self.information_window = None
         self.calculator_window = None
         self.graph_window = None
+        self.histogram_window = None
         
     def create_widget(self):
         self.control_frame = ttk.Frame(self)
@@ -51,7 +52,8 @@ class TopWindow(tk.Tk):
         
     def open_calculator(self):
         if self.calculator_window:
-            self.calculator_window.focus()
+            self.calculator_window.deiconify()
+            self.calculator_window.focus_force()
         else:
             self.calculator_window = Calculator(self)
             self.calculator_window.protocol("WM_DELETE_WINDOW", self.calculator_window.close)
@@ -82,21 +84,24 @@ class TopWindow(tk.Tk):
         
     def show_information(self):
         if self.information_window:
-            self.information_window.focus()
+            self.information_window.deiconify()
+            self.information_window.focus_force()
         else:
             self.information_window = InformationWindow(self)
             self.information_window.protocol("WM_DELETE_WINDOW", self.information_window.close)
 
     def show_graph(self):
         if self.graph_window:
-            self.graph_window.focus()
+            self.graph_window.deiconify()
+            self.graph_window.focus_force()
         else:
             self.graph_window = Graph(self)
             self.graph_window.protocol("WM_DELETE_WINDOW", self.graph_window.close)
 
     def show_histogram(self):
-        if self.graph_window:
-            self.graph_window.focus()
+        if self.histogram_window:
+            self.histogram_window.deiconify()
+            self.histogram_window.focus_force()
         else:
             self.histogram_window = Histogram(self)
             self.histogram_window.protocol("WM_DELETE_WINDOW", self.histogram_window.close)
@@ -177,7 +182,8 @@ class DisplayWindow(tk.Toplevel):
             self.objects_window = ObjectsWindow(self, self.added_apertures)
             self.objects_window.protocol("WM_DELETE_WINDOW", self.objects_window.close)
         else:
-            self.objects_window.focus()
+            self.objects_window.deiconify()
+            self.objects_window.focus_force()
 
     def display_image(self):
         self.ax.imshow(self.image, cmap='gray', norm=self.norm)
