@@ -475,6 +475,8 @@ class DisplayWindow(tk.Toplevel):
     def close(self):
         if self.header_window:
             self.header_window.close()
+        if self.objects_window:
+            self.objects_window.close()
         self.parent.display_windows.remove(self)
         self.destroy()
 
@@ -1021,6 +1023,9 @@ class ObjectsWindow(tk.Toplevel):
         self.save_button = ttk.Button(self.control_frame2, text="Save", command=self.save)
         self.save_button.pack(side=tk.LEFT, fill=tk.X, expand=True)
         
+        self.save_all_button = ttk.Button(self.control_frame2, text="Save All", command=self.save_all)
+        self.save_all_button.pack(side=tk.RIGHT, fill=tk.X, expand=True)
+        
     def update_table(self):
         self.object_table.delete(*self.object_table.get_children())
         for aperture in self.added_apertures:
@@ -1105,6 +1110,22 @@ class ObjectsWindow(tk.Toplevel):
             y = int(y)
             intensity = float(intensity)
             df.loc[len(df)] = [name, x, y, intensity, note]
+        file_path = filedialog.asksaveasfilename(defaultextension=".csv", filetypes=[("CSV files", "*.csv")])
+        if file_path:
+            df.to_csv(file_path, index=False)
+            messagebox.showinfo("Saved", f"Data saved to {file_path}")
+    
+    def save_all(self):
+        root = self.parent.parent
+        df = pd.DataFrame(columns=["Name", "X", "Y", "Intensity", "Note"])
+        for display_window in root.display_windows:
+            if display_window.objects_window is not None:
+                for object in display_window.objects_window.object_table.get_children():
+                    index, name, x, y, intensity, note = display_window.objects_window.object_table.item(object, "values")
+                    x = int(x)
+                    y = int(y)
+                    intensity = float(intensity)
+                    df.loc[len(df)] = [name, x, y, intensity, note]
         file_path = filedialog.asksaveasfilename(defaultextension=".csv", filetypes=[("CSV files", "*.csv")])
         if file_path:
             df.to_csv(file_path, index=False)
