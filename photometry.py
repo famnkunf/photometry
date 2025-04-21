@@ -5,6 +5,8 @@ from astropy.io import fits
 from astropy.visualization import ImageNormalize, LinearStretch
 import matplotlib as mpl
 mpl.use("TkAgg")
+import matplotlib.style as mplstyle
+mplstyle.use('fast')
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib import patches
@@ -29,6 +31,7 @@ class TopWindow(tk.Tk):
         self.calculator_window = None
         self.graph_window = None
         self.histogram_window = None
+        self.objects_window = None
         
     def create_widget(self):
         self.control_frame = ttk.Frame(self)
@@ -48,6 +51,9 @@ class TopWindow(tk.Tk):
         
         self.histogram_button = ttk.Button(self.control_frame, text="Histogram", command=self.show_histogram)
         self.histogram_button.pack(side=tk.LEFT)
+        
+        self.objects_button = ttk.Button(self.control_frame, text="Objects", command=self.show_objects)
+        self.objects_button.pack(side=tk.LEFT)
         
         
     def open_calculator(self):
@@ -79,6 +85,14 @@ class TopWindow(tk.Tk):
             self.information_window.close()
         for window in self.display_windows:
             window.close()
+        if self.calculator_window:
+            self.calculator_window.close()
+        if self.graph_window:
+            self.graph_window.close()
+        if self.histogram_window:
+            self.histogram_window.close()
+        if self.objects_window:
+            self.objects_window.close()
         self.quit()
         self.destroy()
         
@@ -105,6 +119,14 @@ class TopWindow(tk.Tk):
         else:
             self.histogram_window = Histogram(self)
             self.histogram_window.protocol("WM_DELETE_WINDOW", self.histogram_window.close)
+            
+    def show_objects(self):
+        if self.objects_window:
+            self.objects_window.deiconify()
+            self.objects_window.focus_force()
+        else:
+            self.objects_window = ObjectsWindow(self)
+            self.objects_window.protocol("WM_DELETE_WINDOW", self.objects_window.close)
 class DisplayWindow(tk.Toplevel):
     def __init__(self, image, header, title, parent:TopWindow=None):
         super().__init__()
@@ -114,7 +136,6 @@ class DisplayWindow(tk.Toplevel):
         self.header = header
         self.parent = parent
         self.header_window = None
-        self.objects_window = None
         self.norm = ImageNormalize(self.image, stretch=LinearStretch())
         self.pan_start = None
         self.adding_aperture = False
@@ -153,9 +174,6 @@ class DisplayWindow(tk.Toplevel):
         self.add_aperture_button = ttk.Button(self.control_frame1, text="Add Aperture", command=self.add_aperture)
         self.add_aperture_button.pack(side=tk.LEFT)
         
-        self.objects_button = ttk.Button(self.control_frame1, text="Objects", command=self.show_table)
-        self.objects_button.pack(side=tk.LEFT)
-        
         self.positionX_label = ttk.Label(self.control_frame2, text="X:")
         self.positionX_label.pack(side=tk.LEFT)
         self.positionY_label = ttk.Label(self.control_frame2, text="Y:")
@@ -176,14 +194,6 @@ class DisplayWindow(tk.Toplevel):
         else:
             messagebox.showerror("Error", "No header information available.")
         # self.header_window.mainloop()
-
-    def show_table(self):
-        if self.objects_window is None:
-            self.objects_window = ObjectsWindow(self, self.added_apertures)
-            self.objects_window.protocol("WM_DELETE_WINDOW", self.objects_window.close)
-        else:
-            self.objects_window.deiconify()
-            self.objects_window.focus_force()
 
     def display_image(self):
         self.ax.imshow(self.image, cmap='gray', norm=self.norm)
@@ -314,12 +324,12 @@ class DisplayWindow(tk.Toplevel):
                         i.set_center((x, y))
                         self.ax.add_patch(i)
                     self.added_apertures.append(self.aperture)
+                    if self.parent.objects_window:
+                        self.parent.objects_window.update_table()
                     self.aperture = ()
                     self.aperture_window.close()
                     self.add_aperture_button.state(['!pressed'])
                     self.adding_aperture = False
-                    if self.objects_window:
-                        self.objects_window.update_table()
                     self.canvas.draw_idle()
             else:
                 if not self.drawing_type:
@@ -475,8 +485,6 @@ class DisplayWindow(tk.Toplevel):
     def close(self):
         if self.header_window:
             self.header_window.close()
-        if self.objects_window:
-            self.objects_window.close()
         self.parent.display_windows.remove(self)
         self.destroy()
 
@@ -990,13 +998,12 @@ class Aperture(tk.Toplevel):
         return (coords[1] + rr_min, coords[0] + cc_min)
     
 class ObjectsWindow(tk.Toplevel):
-    def __init__(self, parent: DisplayWindow=None, added_apertures=None):
+    def __init__(self, parent: TopWindow=None):
         super().__init__()
         self.parent = parent
         self.title(self.parent.title())
-        self.geometry("400x300")
+        self.geometry("600x300")
         self.attributes("-topmost", True)
-        self.added_apertures = added_apertures
         self.parent.objects_window = self
         self.current_selection = None
         
@@ -1006,9 +1013,13 @@ class ObjectsWindow(tk.Toplevel):
         self.control_frame1 = ttk.Frame(self)
         self.control_frame1.pack(side=tk.TOP, fill=tk.X)
         
-        self.object_table = ttk.Treeview(self.control_frame1, columns=("Index", "Name", "X", "Y", "Intensity", "Note"), show="headings")
+        self.object_table = ttk.Treeview(self.control_frame1, columns=("#0","Index", "Name", "X", "Y", "Intensity", "Note"), show="headings")
         for i in self.object_table["columns"]:
-            self.object_table.heading(i, text=i)
+            if i == "#0":
+                self.object_table.heading(i, text="#")
+                self.object_table.column(i, width=50)
+                continue
+            self.object_table.heading(i, text=i, anchor=tk.CENTER)
             self.object_table.column(i, width=50)
         self.object_table.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
         self.object_table.bind("<ButtonRelease-1>", self.on_left_click)
@@ -1023,15 +1034,15 @@ class ObjectsWindow(tk.Toplevel):
         self.save_button = ttk.Button(self.control_frame2, text="Save", command=self.save)
         self.save_button.pack(side=tk.LEFT, fill=tk.X, expand=True)
         
-        self.save_all_button = ttk.Button(self.control_frame2, text="Save All", command=self.save_all)
-        self.save_all_button.pack(side=tk.RIGHT, fill=tk.X, expand=True)
-        
     def update_table(self):
         self.object_table.delete(*self.object_table.get_children())
-        for aperture in self.added_apertures:
-            x, y = aperture[0].center
-            intensity = self.get_intensity(aperture[0], aperture[1], aperture[2], self.parent.image)
-            self.object_table.insert("", "end", values=((len(self.object_table.get_children())+1), "", x, y, intensity, ""))
+        for display_window in self.parent.display_windows:
+            iid = self.object_table.insert("", "end", values=(display_window.title().split("/")[-1], "", "", "", "", "", display_window.title()), open=True)
+            n = 1
+            for aperture in display_window.added_apertures:
+                x, y = aperture[0].center
+                intensity = self.get_intensity(aperture[0], aperture[1], aperture[2], display_window.image)
+                self.object_table.insert(iid, "end", values=("", n, "", x, y, intensity, ""))
         
     def delete(self, event: tk.Event):
         if len(self.object_table.selection()) > 0:
@@ -1050,13 +1061,13 @@ class ObjectsWindow(tk.Toplevel):
                       
     def on_double_click(self, event):
         col_n = self.object_table.identify_column(event.x)
-        if col_n == "#2":
+        if col_n == "#3":
             selected_item = self.object_table.selection()[0]
             name = self.object_table.item(selected_item, "values")[1]
             name = tk.simpledialog.askstring("Edit Name", "Enter new name:", initialvalue=name)
             if name:
                 self.object_table.set(selected_item, column=1, value=name)
-        elif col_n == "#6":
+        elif col_n == "#7":
             selected_item = self.object_table.selection()[0]
             note = self.object_table.item(selected_item, "values")[5]
             note = tk.simpledialog.askstring("Edit Note", "Enter new note:", initialvalue=note)
@@ -1067,15 +1078,26 @@ class ObjectsWindow(tk.Toplevel):
         if len(self.object_table.selection()) == 0:
             return
         selected_item = self.object_table.selection()[0]
-        index, name, x, y, intensity, note = self.object_table.item(selected_item, "values")
+        if self.object_table.item(selected_item, "values")[1] == "":
+            return
+        parent_title = self.object_table.item(self.object_table.parent(selected_item), "values")[6]
+        display_window = None
+        for window in self.parent.display_windows:
+            if window.title() == parent_title:
+                display_window = window
+        if display_window is None:
+            return
+        _, index, name, x, y, intensity, note = self.object_table.item(selected_item, "values")
         x = int(x)
         y = int(y)
         intensity = float(intensity)
         if self.current_selection is not None:
             self.current_selection[0].remove()
-        self.current_selection = self.parent.ax.plot(x, y, 'ro')
-        self.parent.ax.set_aspect('equal')
-        self.parent.canvas.draw_idle()
+        self.current_selection = display_window.ax.plot(x, y, 'ro')
+        display_window.deiconify()
+        display_window.focus_force()
+        display_window.ax.set_aspect('equal')
+        display_window.canvas.draw_idle()
         
     def on_right_click(self, event):
         if self.current_selection is not None:
@@ -1104,28 +1126,19 @@ class ObjectsWindow(tk.Toplevel):
     
     def save(self):
         df = pd.DataFrame(columns=["Name", "X", "Y", "Intensity", "Note"])
-        for item in self.object_table.get_children():
-            index, name, x, y, intensity, note = self.object_table.item(item, "values")
-            x = int(x)
-            y = int(y)
-            intensity = float(intensity)
-            df.loc[len(df)] = [name, x, y, intensity, note]
-        file_path = filedialog.asksaveasfilename(defaultextension=".csv", filetypes=[("CSV files", "*.csv")])
-        if file_path:
-            df.to_csv(file_path, index=False)
-            messagebox.showinfo("Saved", f"Data saved to {file_path}")
-    
-    def save_all(self):
-        root = self.parent.parent
-        df = pd.DataFrame(columns=["Name", "X", "Y", "Intensity", "Note"])
-        for display_window in root.display_windows:
-            if display_window.objects_window is not None:
-                for object in display_window.objects_window.object_table.get_children():
-                    index, name, x, y, intensity, note = display_window.objects_window.object_table.item(object, "values")
-                    x = int(x)
-                    y = int(y)
-                    intensity = float(intensity)
-                    df.loc[len(df)] = [name, x, y, intensity, note]
+        current = ""
+        for group in self.object_table.get_children():
+            for item in self.object_table.get_children(group):
+                if self.object_table.item(item, "values")[1] == "":
+                    current = self.object_table.item(item, "values")[0]
+                    continue
+                _, index, name, x, y, intensity, note = self.object_table.item(item, "values")
+                if note == "":
+                    note = current
+                x = int(x)
+                y = int(y)
+                intensity = float(intensity)
+                df.loc[len(df)] = [name, x, y, intensity, note]
         file_path = filedialog.asksaveasfilename(defaultextension=".csv", filetypes=[("CSV files", "*.csv")])
         if file_path:
             df.to_csv(file_path, index=False)
