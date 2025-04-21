@@ -485,6 +485,8 @@ class DisplayWindow(tk.Toplevel):
     def close(self):
         if self.header_window:
             self.header_window.close()
+        if self.aperture_window:
+            self.aperture_window.close()
         self.parent.display_windows.remove(self)
         self.destroy()
 
@@ -1043,33 +1045,40 @@ class ObjectsWindow(tk.Toplevel):
                 x, y = aperture[0].center
                 intensity = self.get_intensity(aperture[0], aperture[1], aperture[2], display_window.image)
                 self.object_table.insert(iid, "end", values=("", n, "", x, y, intensity, ""))
+                n+=1
         
     def delete(self, event: tk.Event):
         if len(self.object_table.selection()) > 0:
-            index = int(self.object_table.item(self.object_table.selection()[0], "values")[0])-1
-            for i in self.added_apertures[index]:
-                i.remove()
-            self.parent.added_apertures.pop(index)
-            if self.current_selection is not None:  
+            item = self.object_table.selection()[0]
+            if self.object_table.item(item, "values")[1] == "":
+                return
+            parent = self.object_table.parent(item)
+            for window in self.parent.display_windows:
+                if window.title() == self.object_table.item(parent, "values")[6]:
+                    index = int(self.object_table.item(item, "values")[1])-1
+                    for i in window.added_apertures[index]:
+                        i.remove()
+                    window.added_apertures.pop(index)
+                    break
+            self.object_table.delete(item)
+            if self.current_selection is not None:
                 self.current_selection[0].remove()
                 self.current_selection = None
-            self.parent.canvas.draw_idle()
-            for i, c in enumerate(self.object_table.get_children()):
-                self.object_table.set(c, column=0, value=i)
-            for item in self.object_table.selection():
-                self.object_table.delete(item)
+            window.canvas.draw_idle()
+            for i, c in enumerate(self.object_table.get_children(parent)):
+                self.object_table.set(c, column=1, value=i+1)
                       
     def on_double_click(self, event):
         col_n = self.object_table.identify_column(event.x)
         if col_n == "#3":
             selected_item = self.object_table.selection()[0]
-            name = self.object_table.item(selected_item, "values")[1]
+            name = self.object_table.item(selected_item, "values")[2]
             name = tk.simpledialog.askstring("Edit Name", "Enter new name:", initialvalue=name)
             if name:
                 self.object_table.set(selected_item, column=1, value=name)
         elif col_n == "#7":
             selected_item = self.object_table.selection()[0]
-            note = self.object_table.item(selected_item, "values")[5]
+            note = self.object_table.item(selected_item, "values")[6]
             note = tk.simpledialog.askstring("Edit Note", "Enter new note:", initialvalue=note)
             if note:
                 self.object_table.set(selected_item, column=5, value=note)
@@ -1082,7 +1091,10 @@ class ObjectsWindow(tk.Toplevel):
             return
         parent_title = self.object_table.item(self.object_table.parent(selected_item), "values")[6]
         display_window = None
+        if self.current_selection is not None:
+            self.current_selection[0].remove()
         for window in self.parent.display_windows:
+            window.canvas.draw_idle()
             if window.title() == parent_title:
                 display_window = window
         if display_window is None:
@@ -1091,18 +1103,18 @@ class ObjectsWindow(tk.Toplevel):
         x = int(x)
         y = int(y)
         intensity = float(intensity)
-        if self.current_selection is not None:
-            self.current_selection[0].remove()
         self.current_selection = display_window.ax.plot(x, y, 'ro')
         display_window.deiconify()
-        display_window.focus_force()
+        display_window.lift()
+        self.object_table.focus_force()
         display_window.ax.set_aspect('equal')
         display_window.canvas.draw_idle()
         
     def on_right_click(self, event):
         if self.current_selection is not None:
             self.current_selection[0].remove()
-            self.parent.canvas.draw_idle()
+            for window in self.parent.display_windows:
+                window.canvas.draw_idle()
             self.current_selection = None
         
     def get_intensity(self, inner_aperture, gap_aperture, outer_aperture, image):
