@@ -188,12 +188,12 @@ class DisplayWindow(tk.Toplevel):
         self.bind("<Button-1>", self.on_focus)
         
     def show_header(self):
-        if self.header is not None:
+        if self.header_window is None:
             self.header_window = HeaderWindow(self.header, self)
             self.header_window.protocol("WM_DELETE_WINDOW", self.header_window.close)
         else:
-            messagebox.showerror("Error", "No header information available.")
-        # self.header_window.mainloop()
+            self.header_window.deiconify()
+            self.header_window.focus_force()
 
     def display_image(self):
         self.ax.imshow(self.image, cmap='gray', norm=self.norm)
@@ -1075,13 +1075,13 @@ class ObjectsWindow(tk.Toplevel):
             name = self.object_table.item(selected_item, "values")[2]
             name = tk.simpledialog.askstring("Edit Name", "Enter new name:", initialvalue=name)
             if name:
-                self.object_table.set(selected_item, column=1, value=name)
+                self.object_table.set(selected_item, column=2, value=name)
         elif col_n == "#7":
             selected_item = self.object_table.selection()[0]
             note = self.object_table.item(selected_item, "values")[6]
             note = tk.simpledialog.askstring("Edit Note", "Enter new note:", initialvalue=note)
             if note:
-                self.object_table.set(selected_item, column=5, value=note)
+                self.object_table.set(selected_item, column=6, value=note)
                       
     def on_left_click(self, event):
         if len(self.object_table.selection()) == 0:
