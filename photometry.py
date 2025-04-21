@@ -214,7 +214,7 @@ class DisplayWindow(tk.Toplevel):
         gap = float(self.aperture_window.gap.get())
         angle = float(self.aperture_window.aperture_angle.get())
         background = float(self.aperture_window.background.get())
-        self.aperture_prev_params = (a, b, gap, angle, background)
+        self.aperture_prev_params = (a, b, angle, gap, background)
         p = patches.Ellipse((x, y), a, b, angle=angle, color='red', fill=False, lw=1)
         g = patches.Ellipse((x, y), a+gap, b+gap, angle=angle, color='red', fill=False, lw=1, linestyle='dashed')
         bg = patches.Ellipse((x, y), a+gap+background, b+gap+background, angle=angle, color='blue', fill=False, lw=1, linestyle='dashed')
