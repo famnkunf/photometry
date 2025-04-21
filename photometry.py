@@ -76,8 +76,13 @@ class TopWindow(tk.Tk):
                 self.open_display_window(image, header, file_path)
 
     def open_display_window(self, image, header, file_path):
-        self.display_windows.append(DisplayWindow(image, header, file_path, self))
+        window = DisplayWindow(image, header, file_path, self)
+        self.display_windows.append(window)
         self.display_windows[-1].protocol("WM_DELETE_WINDOW", self.display_windows[-1].close)
+
+        if self.objects_window:
+            self.objects_window.add_window(window)
+        
         # self.display_windows[-1].mainloop()
         
     def close(self):
@@ -1047,7 +1052,7 @@ class ObjectsWindow(tk.Toplevel):
                 self.object_table.insert(iid, "end", values=("", n, "", x, y, intensity, ""))
                 n+=1
         
-    def add(self, aperture, window):
+    def add(self, aperture: list|tuple, window: DisplayWindow):
         for w in self.object_table.get_children():
             if self.object_table.item(w, "values")[6] == window.title():
                 if len(self.object_table.get_children(w)) == 0:
@@ -1058,12 +1063,24 @@ class ObjectsWindow(tk.Toplevel):
                 intensity = self.get_intensity(aperture[0], aperture[1], aperture[2], window.image)
                 self.object_table.insert(w, "end", values=("", n, "", aperture[0].center[0], aperture[0].center[1], intensity, ""))
                 break
-        
+            
+    def add_window(self, window: DisplayWindow):
+        self.object_table.insert("", "end", values=(window.title().split("/")[-1], "", "", "", "", "", window.title()), open=True)
+                
     def delete(self, event: tk.Event):
         if len(self.object_table.selection()) > 0:
             item = self.object_table.selection()[0]
             if self.object_table.item(item, "values")[1] == "":
-                return
+                for window in self.parent.display_windows:
+                    if window.title() == self.object_table.item(item, "values")[6]:
+                        for i in window.added_apertures:
+                            for j in i:
+                                j.remove()
+                        window.added_apertures = []
+                        window.canvas.draw_idle()
+                        window.close()
+                        self.object_table.delete(item)
+                        return
             parent = self.object_table.parent(item)
             for window in self.parent.display_windows:
                 if window.title() == self.object_table.item(parent, "values")[6]:
