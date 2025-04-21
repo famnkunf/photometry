@@ -224,8 +224,8 @@ class DisplayWindow(tk.Toplevel):
             self.aperture_window.close()
         
     def draw_aperture(self, x, y):
-        a = float(self.aperture_window.aperture_major.get())
-        b = float(self.aperture_window.aperture_minor.get())
+        a = float(self.aperture_window.aperture_major_var.get())
+        b = float(self.aperture_window.aperture_minor_var.get())
         gap = float(self.aperture_window.gap.get())
         angle = float(self.aperture_window.aperture_angle.get())
         background = float(self.aperture_window.background.get())
@@ -867,22 +867,26 @@ class Aperture(tk.Toplevel):
         self.control_frame6 = ttk.Frame(self)
         self.control_frame6.pack(side=tk.TOP, fill=tk.X)
         
-        
+        self.aperture_major_var = tk.StringVar()
         self.aperture_major_label = ttk.Label(self.control_frame1, text="Aperture Major axis:")
         self.aperture_major_label.pack(side=tk.TOP, fill=tk.X)
-        self.aperture_major = ttk.Entry(self.control_frame1)
+        self.aperture_major = ttk.Entry(self.control_frame1, textvariable=self.aperture_major_var)
         self.aperture_major.pack(side=tk.TOP, fill=tk.X)
         self.aperture_major.insert(0, str(a))
         self.aperture_major.bind("<Up>", self.increase_axis)
         self.aperture_major.bind("<Down>", self.decrease_axis)
 
+        self.aperture_minor_var = tk.StringVar()
         self.aperture_minor_label = ttk.Label(self.control_frame2, text="Aperture Minor axis:")        
         self.aperture_minor_label.pack(side=tk.TOP, fill=tk.X)
-        self.aperture_minor = ttk.Entry(self.control_frame2)
+        self.aperture_minor = ttk.Entry(self.control_frame2, textvariable=self.aperture_minor_var)
         self.aperture_minor.pack(side=tk.TOP, fill=tk.X)
         self.aperture_minor.insert(0, str(b))
         self.aperture_minor.bind("<Up>", self.increase_axis)
         self.aperture_minor.bind("<Down>", self.decrease_axis)
+        
+        self.aperture_major_var.trace_add("write", lambda *args: self.aperture_major_onchange())
+        self.aperture_minor_var.trace_add("write", lambda *args: self.aperture_minor_onchange())
         
         self.aperture_angle_label = ttk.Label(self.control_frame3, text="Aperture Angle:")
         self.aperture_angle_label.pack(side=tk.TOP, fill=tk.X)
@@ -911,6 +915,22 @@ class Aperture(tk.Toplevel):
         self.enable_circle_aperture_checkbox = ttk.Checkbutton(self.control_frame6, text="Enable Circle Aperture?", variable=self.enable_circle_aperture)
         self.enable_circle_aperture.set(True)
         self.enable_circle_aperture_checkbox.pack(side=tk.RIGHT)
+
+    def aperture_major_onchange(self):
+        if self.enable_circle_aperture.get():
+            if self.aperture_major_var.get() == "":
+                return
+            self.aperture_minor_var.set(self.aperture_major_var.get())
+            x, y = self.parent.aperture[0].get_center()
+            self.parent.draw_aperture(x, y)
+            
+    def aperture_minor_onchange(self):
+        if self.enable_circle_aperture.get():
+            if self.aperture_minor_var.get() == "":
+                return
+            self.aperture_major_var.set(self.aperture_minor_var.get())
+            x, y = self.parent.aperture[0].get_center()
+            self.parent.draw_aperture(x, y)
 
     def increase_axis(self, event):
         if self.enable_circle_aperture.get():
