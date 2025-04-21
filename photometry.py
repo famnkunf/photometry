@@ -325,7 +325,7 @@ class DisplayWindow(tk.Toplevel):
                         self.ax.add_patch(i)
                     self.added_apertures.append(self.aperture)
                     if self.parent.objects_window:
-                        self.parent.objects_window.update_table()
+                        self.parent.objects_window.add(self.aperture, self)
                     self.aperture = ()
                     self.aperture_window.close()
                     self.add_aperture_button.state(['!pressed'])
@@ -1046,6 +1046,18 @@ class ObjectsWindow(tk.Toplevel):
                 intensity = self.get_intensity(aperture[0], aperture[1], aperture[2], display_window.image)
                 self.object_table.insert(iid, "end", values=("", n, "", x, y, intensity, ""))
                 n+=1
+        
+    def add(self, aperture, window):
+        for w in self.object_table.get_children():
+            if self.object_table.item(w, "values")[6] == window.title():
+                if len(self.object_table.get_children(w)) == 0:
+                    n = 1
+                else:
+                    last_item = self.object_table.get_children(w)[-1]
+                    n = int(self.object_table.item(last_item, "values")[1]) + 1
+                intensity = self.get_intensity(aperture[0], aperture[1], aperture[2], window.image)
+                self.object_table.insert(w, "end", values=("", n, "", aperture[0].center[0], aperture[0].center[1], intensity, ""))
+                break
         
     def delete(self, event: tk.Event):
         if len(self.object_table.selection()) > 0:
