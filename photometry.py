@@ -1125,20 +1125,16 @@ class ObjectsWindow(tk.Toplevel):
         self.destroy()
     
     def save(self):
-        df = pd.DataFrame(columns=["Name", "X", "Y", "Intensity", "Note"])
+        df = pd.DataFrame(columns=["#0", "Name", "X", "Y", "Intensity", "Note"])
         current = ""
         for group in self.object_table.get_children():
+            df.loc[len(df)] = [self.object_table.item(group, "values")[0], "", "", "", "", ""]
             for item in self.object_table.get_children(group):
-                if self.object_table.item(item, "values")[1] == "":
-                    current = self.object_table.item(item, "values")[0]
-                    continue
                 _, index, name, x, y, intensity, note = self.object_table.item(item, "values")
-                if note == "":
-                    note = current
                 x = int(x)
                 y = int(y)
                 intensity = float(intensity)
-                df.loc[len(df)] = [name, x, y, intensity, note]
+                df.loc[len(df)] = ["", name, x, y, intensity, note]
         file_path = filedialog.asksaveasfilename(defaultextension=".csv", filetypes=[("CSV files", "*.csv")])
         if file_path:
             df.to_csv(file_path, index=False)
