@@ -332,9 +332,9 @@ class DisplayWindow(tk.Toplevel):
                     if self.parent.objects_window:
                         self.parent.objects_window.add(self.aperture, self)
                     self.aperture = ()
-                    self.aperture_window.close()
-                    self.add_aperture_button.state(['!pressed'])
-                    self.adding_aperture = False
+                    # self.aperture_window.close()
+                    # self.add_aperture_button.state(['!pressed'])
+                    # self.adding_aperture = False
                     self.canvas.draw_idle()
             else:
                 if not self.drawing_type:
