@@ -1027,7 +1027,6 @@ class Aperture(tk.Toplevel):
         x_center, y_center = centroid_2dg(image)
         x_center += rr_min
         y_center += cc_min
-        print(x_center, y_center)
         return (x_center, y_center)
     
 class ObjectsWindow(tk.Toplevel):
