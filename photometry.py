@@ -143,6 +143,8 @@ class DisplayWindow(tk.Toplevel):
         self.parent = parent
         self.header_window = None
         self.norm = ImageNormalize(self.image, stretch=LinearStretch())
+        self.norm.vmin = self.image.mean() - 0. * self.image.std()
+        self.norm.vmax = self.image.mean() + 0.5 * self.image.std()
         self.pan_start = None
         self.adding_aperture = False
         self.aperture_window = None
@@ -829,7 +831,7 @@ class Histogram(tk.Toplevel):
         self.vmax.set(self.max_value)
         self.select_range_slider1.config(state=tk.NORMAL)
         self.select_range_slider1.config(from_=self.min_value, to=self.max_value)
-        self.select_range_slider1.set(self.mean-self.sigma*0.5)
+        self.select_range_slider1.set(self.mean-self.sigma*0.)
         self.select_range_slider2.config(state=tk.NORMAL)
         self.select_range_slider2.config(from_=self.min_value, to=self.max_value)
         self.select_range_slider2.set(self.mean+self.sigma*0.5)
