@@ -191,7 +191,7 @@ class DisplayWindow(tk.Toplevel):
         self.canvas.mpl_connect('button_release_event', self.stop_pan)
         self.canvas.mpl_connect('motion_notify_event', self.on_pan)
         
-        self.bind("<Button-1>", self.on_focus)
+        self.bind("<FocusIn>", self.on_focus)
         
     def show_header(self):
         if self.header_window is None:
@@ -312,6 +312,10 @@ class DisplayWindow(tk.Toplevel):
                 self.annotate.remove()
                 self.annotate = None
             self.drawing_type = False
+        if self.parent.histogram_window:
+            self.parent.histogram_window.display_window_select.set(self.title())
+            self.parent.histogram_window.selected_window = self
+            self.parent.histogram_window.compute()
 
     def start_pan(self, event):
         if event.button == 1:
@@ -825,10 +829,10 @@ class Histogram(tk.Toplevel):
         self.vmax.set(self.max_value)
         self.select_range_slider1.config(state=tk.NORMAL)
         self.select_range_slider1.config(from_=self.min_value, to=self.max_value)
-        self.select_range_slider1.set(self.mean)
+        self.select_range_slider1.set(self.mean-self.sigma*0.5)
         self.select_range_slider2.config(state=tk.NORMAL)
         self.select_range_slider2.config(from_=self.min_value, to=self.max_value)
-        self.select_range_slider2.set(self.mean)
+        self.select_range_slider2.set(self.mean+self.sigma*0.5)
         self.plot_histogram(self.data)        
     
     def plot_histogram(self, data):
