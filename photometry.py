@@ -547,6 +547,7 @@ class Calculator(tk.Toplevel):
         
         self.variables = {}
         self.n_variables = 0
+        self.n_result = 0
 
     def create_widget(self):
         self.control_frame1 = ttk.Frame(self)
@@ -634,7 +635,7 @@ class Calculator(tk.Toplevel):
             if key in formular:
                 formular = formular.replace(key, replace_dict[key])
         output = re.compile(r'!#(.*)$', re.MULTILINE)
-        var = re.compile(r'\$\((\w+)\)')
+        var = re.compile(r'\$\((.+?)\)')
         formular = var.sub(self.format_var, formular)
         formular = output.sub(self.format, formular)    
         try:
@@ -644,13 +645,14 @@ class Calculator(tk.Toplevel):
             return
 
     def format_var(self, match):
-        return "eval(\"self.variables[('$' + str({w}))]['display'].image\")".format(w=match.group(1))
+        return "eval(\"self.variables[('$' + str(int({w})))]['display'].image\")".format(w=match.group(1))
 
     def format(self, match):
         return f"self.output({match.group(1)})"
 
     def output(self, result):
-        self.parent.open_display_window(result, None, "Result")
+        self.n_result += 1
+        self.parent.open_display_window(result, None, f"Result {self.n_result}")
 
     def close(self):
         self.parent.calculator_window = None
