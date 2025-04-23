@@ -10,6 +10,7 @@ mplstyle.use('fast')
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib import patches
+from photutils.centroids import centroid_2dg
 # from photutils.aperture import CircularAperture, CircularAnnulus, aperture_photometry
 import numpy as np
 import regex as re
@@ -322,7 +323,7 @@ class DisplayWindow(tk.Toplevel):
         if event.button == 1:
             if self.adding_aperture:
                 if len(self.aperture) > 0:
-                    x, y = self.aperture_window.get_max(self.aperture[0], self.image)
+                    x, y = self.aperture_window.find_centroid(self.aperture[0], self.image)
                     for i in self.aperture:
                         i.remove()
                         i.set_color('yellow')
@@ -1014,7 +1015,7 @@ class Aperture(tk.Toplevel):
             self.parent.add_aperture_button.state(['!pressed'])
         self.destroy()
         
-    def get_max(self, aperture: patches.Ellipse, image):
+    def find_centroid(self, aperture: patches.Ellipse, image):
         rr, cc = skimage.draw.ellipse(aperture.center[0], aperture.center[1], aperture.width/2, aperture.height/2, shape=(image.shape[1], image.shape[0]), rotation=np.deg2rad(aperture.angle))
         if rr.shape[0] == 0 or cc.shape[0] == 0:
             return (aperture.center[0], aperture.center[1])
@@ -1023,8 +1024,11 @@ class Aperture(tk.Toplevel):
         cc_min = np.min(cc)
         cc_max = np.max(cc)
         image = image[cc_min:cc_max, rr_min:rr_max]
-        coords = np.unravel_index(np.argmax(image, axis=None), image.shape)
-        return (coords[1] + rr_min, coords[0] + cc_min)
+        x_center, y_center = centroid_2dg(image)
+        x_center += rr_min
+        y_center += cc_min
+        print(x_center, y_center)
+        return (x_center, y_center)
     
 class ObjectsWindow(tk.Toplevel):
     def __init__(self, parent: TopWindow=None):
