@@ -1031,6 +1031,8 @@ class Aperture(tk.Toplevel):
         cc_max = np.max(cc)
         image = image[cc_min:cc_max, rr_min:rr_max]
         x_center, y_center = centroid_2dg(image)
+        if x_center > image.shape[0] or y_center > image.shape[1]:
+            return (aperture.center[0], aperture.center[1])
         x_center += rr_min
         y_center += cc_min
         return (x_center, y_center)
@@ -1051,7 +1053,7 @@ class ObjectsWindow(tk.Toplevel):
         self.control_frame1 = ttk.Frame(self)
         self.control_frame1.pack(side=tk.TOP, fill=tk.X)
         
-        self.object_table = ttk.Treeview(self.control_frame1, columns=("#0","Index", "Name", "X", "Y", "Intensity", "Note"), show="headings")
+        self.object_table = ttk.Treeview(self.control_frame1, columns=("#0","Index", "Name", "X", "Y", "Intensity", "SNR", "Note"), show="headings")
         for i in self.object_table["columns"]:
             if i == "#0":
                 self.object_table.heading(i, text="#")
@@ -1075,35 +1077,35 @@ class ObjectsWindow(tk.Toplevel):
     def update_table(self):
         self.object_table.delete(*self.object_table.get_children())
         for display_window in self.parent.display_windows:
-            iid = self.object_table.insert("", "end", values=(display_window.title().split("/")[-1], "", "", "", "", "", display_window.title()), open=True)
+            iid = self.object_table.insert("", "end", values=(display_window.title().split("/")[-1], "", "", "", "", "", "", display_window.title()), open=True)
             n = 1
             for aperture in display_window.added_apertures:
                 x, y = aperture[0].center
-                intensity = self.get_intensity(aperture[0], aperture[1], aperture[2], display_window.image)
-                self.object_table.insert(iid, "end", values=("", n, "", x, y, intensity, ""))
+                intensity, snr = self.get_intensity_and_snr(aperture[0], aperture[1], aperture[2], display_window.image)
+                self.object_table.insert(iid, "end", values=("", n, "", x, y, intensity, snr, ""))
                 n+=1
         
     def add(self, aperture: list|tuple, window: DisplayWindow):
         for w in self.object_table.get_children():
-            if self.object_table.item(w, "values")[6] == window.title():
+            if self.object_table.item(w, "values")[7] == window.title():
                 if len(self.object_table.get_children(w)) == 0:
                     n = 1
                 else:
                     last_item = self.object_table.get_children(w)[-1]
                     n = int(self.object_table.item(last_item, "values")[1]) + 1
-                intensity = self.get_intensity(aperture[0], aperture[1], aperture[2], window.image)
-                self.object_table.insert(w, "end", values=("", n, "", aperture[0].center[0], aperture[0].center[1], intensity, ""))
+                intensity, snr = self.get_intensity_and_snr(aperture[0], aperture[1], aperture[2], window.image)
+                self.object_table.insert(w, "end", values=("", n, "", aperture[0].center[0], aperture[0].center[1], intensity, snr, ""))
                 break
             
     def add_window(self, window: DisplayWindow):
-        self.object_table.insert("", "end", values=(window.title().split("/")[-1], "", "", "", "", "", window.title()), open=True)
+        self.object_table.insert("", "end", values=(window.title().split("/")[-1], "", "", "", "", "", "", window.title()), open=True)
                 
     def delete(self, event: tk.Event):
         if len(self.object_table.selection()) > 0:
             item = self.object_table.selection()[0]
             if self.object_table.item(item, "values")[1] == "":
                 for window in self.parent.display_windows:
-                    if window.title() == self.object_table.item(item, "values")[6]:
+                    if window.title() == self.object_table.item(item, "values")[7]:
                         for i in window.added_apertures:
                             for j in i:
                                 j.remove()
@@ -1114,7 +1116,7 @@ class ObjectsWindow(tk.Toplevel):
                         return
             parent = self.object_table.parent(item)
             for window in self.parent.display_windows:
-                if window.title() == self.object_table.item(parent, "values")[6]:
+                if window.title() == self.object_table.item(parent, "values")[7]:
                     index = int(self.object_table.item(item, "values")[1])-1
                     for i in window.added_apertures[index]:
                         i.remove()
@@ -1136,9 +1138,9 @@ class ObjectsWindow(tk.Toplevel):
             name = tk.simpledialog.askstring("Edit Name", "Enter new name:", initialvalue=name)
             if name:
                 self.object_table.set(selected_item, column=2, value=name)
-        elif col_n == "#7":
+        elif col_n == "#8":
             selected_item = self.object_table.selection()[0]
-            note = self.object_table.item(selected_item, "values")[6]
+            note = self.object_table.item(selected_item, "values")[7]
             note = tk.simpledialog.askstring("Edit Note", "Enter new note:", initialvalue=note)
             if note:
                 self.object_table.set(selected_item, column=6, value=note)
@@ -1177,7 +1179,7 @@ class ObjectsWindow(tk.Toplevel):
                 window.canvas.draw_idle()
             self.current_selection = None
         
-    def get_intensity(self, inner_aperture, gap_aperture, outer_aperture, image):
+    def get_intensity_and_snr(self, inner_aperture, gap_aperture, outer_aperture, image):
         inner_rr, inner_cc = skimage.draw.ellipse(inner_aperture.center[0], inner_aperture.center[1], inner_aperture.width/2, inner_aperture.height/2, shape=(image.shape[1], image.shape[0]), rotation=np.deg2rad(inner_aperture.angle))
         gap_rr, gap_cc = skimage.draw.ellipse(gap_aperture.center[0], gap_aperture.center[1], gap_aperture.width/2, gap_aperture.height/2, shape=(image.shape[1], image.shape[0]), rotation=np.deg2rad(gap_aperture.angle))
         outer_rr, outer_cc = skimage.draw.ellipse(outer_aperture.center[0], outer_aperture.center[1], outer_aperture.width/2, outer_aperture.height/2, shape=(image.shape[1], image.shape[0]), rotation=np.deg2rad(outer_aperture.angle))
@@ -1190,23 +1192,25 @@ class ObjectsWindow(tk.Toplevel):
         background_mask = outer_mask & ~inner_mask & ~gap_mask
         background = np.mean(image[background_mask])
         intensity = np.sum(image[inner_mask]-background)
-        return intensity
+        snr = intensity / (np.std(image[background_mask])*np.sqrt(np.sum(inner_mask)))
+        return intensity, snr
     
     def close(self):
         self.parent.objects_window = None
         self.destroy()
     
     def save(self):
-        df = pd.DataFrame(columns=["#0", "Name", "X", "Y", "Intensity", "Note"])
+        df = pd.DataFrame(columns=["#0", "Name", "X", "Y", "Intensity", "SNR", "Note"])
         current = ""
         for group in self.object_table.get_children():
-            df.loc[len(df)] = [self.object_table.item(group, "values")[0], "", "", "", "", ""]
+            df.loc[len(df)] = [self.object_table.item(group, "values")[0], "", "", "", "", "", ""]
             for item in self.object_table.get_children(group):
-                _, index, name, x, y, intensity, note = self.object_table.item(item, "values")
-                x = int(x)
-                y = int(y)
+                _, index, name, x, y, intensity, snr, note = self.object_table.item(item, "values")
+                x = float(x)
+                y = float(y)
                 intensity = float(intensity)
-                df.loc[len(df)] = ["", name, x, y, intensity, note]
+                snr = float(snr)
+                df.loc[len(df)] = ["", name, x, y, intensity, snr, note]
         file_path = filedialog.asksaveasfilename(defaultextension=".csv", filetypes=[("CSV files", "*.csv")])
         if file_path:
             df.to_csv(file_path, index=False)
